@@ -1,0 +1,23 @@
+   Γû▓ Next.js 15.3.8
+
+   Creating an optimized production build ...
+ Γ£ô Compiled successfully in 50s
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+   Generating static pages (0/21) ...
+ ΓÜá metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase
+Error occurred prerendering page "/_not-found". Read more: https://nextjs.org/docs/messages/prerender-error
+Error: useFirebase must be used within a FirebaseProvider.
+    at p (E:\Tionat Nutrition Hub\.next\server\chunks\583.js:2:1872)
+    at h (E:\Tionat Nutrition Hub\.next\server\chunks\583.js:2:2355)
+    at E:\Tionat Nutrition Hub\.next\server\chunks\583.js:2:15290
+    at C (E:\Tionat Nutrition Hub\.next\server\chunks\583.js:2:15546)
+    at nF (E:\Tionat Nutrition Hub\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:46843)
+    at nH (E:\Tionat Nutrition Hub\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:48618)
+    at nH (E:\Tionat Nutrition Hub\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:64688)
+    at nW (E:\Tionat Nutrition Hub\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:67762)
+    at nz (E:\Tionat Nutrition Hub\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:65337)
+    at nY (E:\Tionat Nutrition Hub\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:76:71193)
+Export encountered an error on /_not-found/page: /_not-found, exiting the build.
+ Γ¿» Next.js build worker exited with code: 1 and signal: null

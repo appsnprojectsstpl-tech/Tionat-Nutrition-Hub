@@ -1,0 +1,172 @@
+{
+  "placeholderImages": [
+    {
+      "id": "hero-1",
+      "description": "A vibrant spread of healthy food ingredients.",
+      "imageUrl": "/tionat/hero-1.png",
+      "imageHint": "healthy food"
+    },
+    {
+      "id": "hero-2",
+      "description": "A beautiful kitchen scene with fresh vegetables on a wooden counter.",
+      "imageUrl": "/tionat/hero-2.png",
+      "imageHint": "kitchen food"
+    },
+    {
+      "id": "product-1",
+      "description": "Ready to Cook Idli Mix",
+      "imageUrl": "/tionat/product-1.png",
+      "imageHint": "idli mix"
+    },
+    {
+      "id": "product-2",
+      "description": "Vada Mix",
+      "imageUrl": "/tionat/product-2.png",
+      "imageHint": "vada mix"
+    },
+    {
+      "id": "product-3",
+      "description": "Chole Mix",
+      "imageUrl": "/tionat/product-3.png",
+      "imageHint": "chole mix"
+    },
+    {
+      "id": "product-4",
+      "description": "Upma Mix",
+      "imageUrl": "/tionat/product-4.png",
+      "imageHint": "upma mix"
+    },
+    {
+      "id": "product-5",
+      "description": "Sambar Mix",
+      "imageUrl": "/tionat/product-5.png",
+      "imageHint": "sambar mix"
+    },
+    {
+      "id": "product-6",
+      "description": "Rasam Mix",
+      "imageUrl": "/tionat/product-6.png",
+      "imageHint": "rasam mix"
+    },
+    {
+      "id": "product-7",
+      "description": "Neutri Vita Strawberry",
+      "imageUrl": "/tionat/product-7.png",
+      "imageHint": "strawberry shake"
+    },
+    {
+      "id": "product-8",
+      "description": "Neutri Vita Vanilla",
+      "imageUrl": "/tionat/product-8.png",
+      "imageHint": "vanilla shake"
+    },
+    {
+      "id": "product-9",
+      "description": "Bisi Bele Bath",
+      "imageUrl": "/tionat/product-9.png",
+      "imageHint": "bisi bele bath"
+    },
+    {
+      "id": "product-10",
+      "description": "Poha Mix",
+      "imageUrl": "/tionat/product-10.png",
+      "imageHint": "poha"
+    },
+    {
+      "id": "product-11",
+      "description": "Dosa Mix",
+      "imageUrl": "/tionat/product-11.png",
+      "imageHint": "dosa"
+    },
+    {
+      "id": "product-12",
+      "description": "Puri Mix",
+      "imageUrl": "/tionat/product-12.png",
+      "imageHint": "puri"
+    },
+    {
+      "id": "product-13",
+      "description": "Dal Rice",
+      "imageUrl": "/tionat/product-13.png",
+      "imageHint": "dal rice"
+    },
+    {
+      "id": "product-14",
+      "description": "Millet Rice",
+      "imageUrl": "/tionat/product-14.png",
+      "imageHint": "millet rice"
+    },
+    {
+      "id": "product-15",
+      "description": "Tomato Rice",
+      "imageUrl": "/tionat/product-15.png",
+      "imageHint": "tomato rice"
+    },
+    {
+      "id": "product-16",
+      "description": "Tomato Dal",
+      "imageUrl": "/tionat/product-16.png",
+      "imageHint": "tomato dal"
+    },
+    {
+      "id": "product-17",
+      "description": "Mango Dal",
+      "imageUrl": "/tionat/product-17.png",
+      "imageHint": "mango dal"
+    },
+    {
+      "id": "product-18",
+      "description": "Spinach Dal",
+      "imageUrl": "/tionat/product-18.png",
+      "imageHint": "spinach dal"
+    },
+    {
+      "id": "product-19",
+      "description": "Gongura Rice",
+      "imageUrl": "/tionat/product-19.png",
+      "imageHint": "gongura rice"
+    },
+    {
+      "id": "product-20",
+      "description": "Gongura Dal",
+      "imageUrl": "/tionat/product-20.png",
+      "imageHint": "gongura dal"
+    },
+    {
+      "id": "product-21",
+      "description": "Jeera Rice",
+      "imageUrl": "/tionat/product-21.png",
+      "imageHint": "jeera rice"
+    },
+    {
+      "id": "product-22",
+      "description": "Biryani Rice",
+      "imageUrl": "/tionat/product-22.png",
+      "imageHint": "biryani"
+    },
+    {
+      "id": "product-23",
+      "description": "Punugulu Mix",
+      "imageUrl": "/tionat/product-23.png",
+      "imageHint": "punugulu"
+    },
+    {
+      "id": "product-24",
+      "description": "Dry Fruit",
+      "imageUrl": "/tionat/product-24.png",
+      "imageHint": "dry fruit"
+    },
+    {
+      "id": "product-25",
+      "description": "Dry Fruit Pieces",
+      "imageUrl": "/tionat/product-25.png",
+      "imageHint": "fruit pieces"
+    },
+    {
+      "id": "user-avatar",
+      "description": "User avatar",
+      "imageUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxwZXJzb258ZW58MHx8fHwxNzYxNjI2Mzg4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person"
+    }
+  ]
+}

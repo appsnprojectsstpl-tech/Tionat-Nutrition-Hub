@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "730068458941",
+    "project_id": "studio-4862173023-78909",
+    "storage_bucket": "studio-4862173023-78909.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:730068458941:android:d9b3e6c63902f4222e46d4",
+        "android_client_info": {
+          "package_name": "com.tionat.nutritionhub"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "730068458941-0slpulrbc0nhvv157vm05luctc4ch9ek.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDM5ydLDuABh_Zpo54Kqw3O7rijUI9LLbI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "730068458941-0slpulrbc0nhvv157vm05luctc4ch9ek.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

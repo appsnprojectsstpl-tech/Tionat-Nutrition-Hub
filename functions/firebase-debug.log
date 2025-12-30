@@ -1,0 +1,17 @@
+[debug] [2025-12-29T16:55:33.999Z] ----------------------------------------------------------------------
+[debug] [2025-12-29T16:55:34.004Z] Command:       C:\Program Files\nodejs\node.exe E:\Tionat Nutrition Hub\functions\node_modules\firebase-tools\lib\bin\firebase.js deploy --only functions
+[debug] [2025-12-29T16:55:34.005Z] CLI Version:   15.1.0
+[debug] [2025-12-29T16:55:34.005Z] Platform:      win32
+[debug] [2025-12-29T16:55:34.005Z] Node Version:  v24.11.1
+[debug] [2025-12-29T16:55:34.006Z] Time:          Mon Dec 29 2025 22:25:34 GMT+0530 (India Standard Time)
+[debug] [2025-12-29T16:55:34.006Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-12-29T16:55:34.011Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2025-12-29T16:55:53.837Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2025-12-29T16:55:53.838Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2025-12-29T16:55:58.213Z] Error: Timed out.
+    at Timeout._onTimeout (E:\Tionat Nutrition Hub\functions\node_modules\firebase-tools\lib\utils.js:275:49)
+    at listOnTimeout (node:internal/timers:605:17)
+    at process.processTimers (node:internal/timers:541:7)
+[error] 
+[error] Error: An unexpected error has occurred.

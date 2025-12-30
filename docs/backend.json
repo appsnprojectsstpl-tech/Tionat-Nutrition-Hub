@@ -1,0 +1,341 @@
+
+{
+  "entities": {
+    "Product": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Product",
+      "type": "object",
+      "description": "Represents a product available for purchase.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the product."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the product."
+        },
+        "slug": {
+          "type": "string",
+          "description": "URL-friendly slug for the product."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the product."
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "URL of the product image."
+        },
+        "price": {
+          "type": "number",
+          "description": "Price of the product."
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Reference to Category. (Relationship: Category 1:N Product)"
+        },
+        "subcategoryId": {
+          "type": "string",
+          "description": "Reference to a SubCategory."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of a product, which can be 'New Arrival' or 'Coming Soon' or 'Available'"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "slug",
+        "description",
+        "imageUrl",
+        "price",
+        "categoryId",
+        "subcategoryId",
+        "status"
+      ]
+    },
+    "Category": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Category",
+      "type": "object",
+      "description": "Represents a category of products.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the category."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the category."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the category (e.g., Active, Coming Soon)."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status"
+      ]
+    },
+    "Inventory": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Inventory",
+        "type": "object",
+        "description": "Represents the stock level for a product.",
+        "properties": {
+            "productId": {
+                "type": "string",
+                "description": "The ID of the product this inventory record belongs to. (Relationship: Product 1:1 Inventory)"
+            },
+            "stock": {
+                "type": "number",
+                "description": "The quantity of the product in stock."
+            }
+        },
+        "required": ["productId", "stock"]
+    },
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
+      "type": "object",
+      "description": "Represents a user's profile.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user profile."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "User's first name."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "User's last name."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "User's phone number."
+        },
+        "addresses": {
+          "type": "array",
+          "description": "An array of user's saved addresses.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "avatarUrl": {
+            "type": "string",
+            "description": "URL of the user's avatar image.",
+            "format": "uri"
+        },
+        "loyaltyPoints": {
+          "type": "number",
+          "description": "User's accumulated loyalty points."
+        },
+        "loyaltyTier": {
+          "type": "string",
+          "description": "User's loyalty tier (e.g., Bronze, Silver, Gold)."
+        },
+        "role": {
+          "type": "string",
+          "description": "The user's role, e.g., 'superadmin', 'admin' or 'user'.",
+          "enum": ["superadmin", "admin", "user"]
+        }
+      },
+      "required": [
+        "id",
+        "firstName",
+        "lastName",
+        "email"
+      ]
+    },
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Represents a customer order.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the order."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N Order)"
+        },
+        "orderDate": {
+          "type": "string",
+          "description": "Date and time the order was placed.",
+          "format": "date-time"
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total amount of the order."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the order (e.g., Pending, Shipped, Delivered)."
+        },
+        "shippingAddress": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "address": {"type": "string"},
+            "city": {"type": "string"},
+            "pincode": {"type": "string"},
+            "phone": {"type": "string"}
+          }
+        },
+        "orderItems": {
+          "type": "array",
+          "description": "Array of order items.",
+          "items": {
+            "type": "object",
+            "properties": {
+               "productId": {"type": "string"},
+               "name": {"type": "string"},
+               "price": {"type": "number"},
+               "quantity": {"type": "number"}
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "orderDate",
+        "totalAmount",
+        "status",
+        "shippingAddress",
+        "orderItems"
+      ]
+    },
+    "LoyaltyProgram": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "LoyaltyProgram",
+      "type": "object",
+      "description": "Represents Loyalty Program configurations and rules.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the loyalty program configuration."
+        },
+        "pointsPerRupee": {
+          "type": "number",
+          "description": "Number of loyalty points earned per Rupee spent."
+        },
+        "pointsToRupeeConversion": {
+          "type": "number",
+          "description": "The amount of Rupees received per loyalty point redeemed."
+        },
+        "tierBronzeDiscount": {
+          "type": "number",
+          "description": "The percentage discount for the Bronze loyalty tier."
+        },
+        "tierSilverDiscount": {
+          "type": "number",
+          "description": "The percentage discount for the Silver loyalty tier."
+        },
+        "tierGoldDiscount": {
+          "type": "number",
+          "description": "The percentage discount for the Gold loyalty tier."
+        },
+        "tierSilverFreeShipping": {
+          "type": "boolean",
+          "description": "Does the silver tier get free shipping?"
+        }
+      },
+      "required": [
+        "id",
+        "pointsPerRupee",
+        "pointsToRupeeConversion",
+        "tierBronzeDiscount",
+        "tierSilverDiscount",
+        "tierGoldDiscount"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/categories/{categoryId}",
+        "definition": {
+          "schema": {
+            "$ref": "#/entities/Category"
+          },
+          "description": "Stores product categories."
+        }
+      },
+      {
+        "path": "/products/{productId}",
+        "definition": {
+          "schema": {
+            "$ref": "#/entities/Product"
+          },
+          "description": "Stores product information."
+        }
+      },
+      {
+        "path": "/inventory/{productId}",
+        "definition": {
+          "schema": {
+            "$ref": "#/entities/Inventory"
+          },
+          "description": "Stores stock levels for each product. The document ID is the same as the product ID."
+        }
+      },
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "schema": {
+            "$ref": "#/entities/UserProfile"
+          },
+          "description": "Stores user profile information, secured by path-based ownership."
+        }
+      },
+      {
+        "path": "/users/{userId}/orders/{orderId}",
+        "definition": {
+          "schema": {
+            "$ref": "#/entities/Order"
+          },
+          "description": "Stores a user's order history. Secured so only the user can access their own orders."
+        }
+      },
+      {
+        "path": "/orders/{orderId}",
+        "definition": {
+            "schema": {
+                "$ref": "#/entities/Order"
+            },
+            "description": "A top-level collection of all orders from all users. Intended for admin access only."
+        }
+      },
+      {
+        "path": "/loyaltyProgram/{loyaltyProgramId}",
+        "definition": {
+          "schema": {
+            "$ref": "#/entities/LoyaltyProgram"
+          },
+          "description": "Stores loyalty program configurations. Admin access required."
+        }
+      }
+    ]
+  }
+}
+    

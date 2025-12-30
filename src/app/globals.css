@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Tionat Premium Light: Tinted Violet & Neon Lime */
+    --background: 270 30% 98%;
+    /* Very pale violet tint */
+    --foreground: 270 95% 10%;
+    /* Deepest violet */
+
+    --card: 0 0% 100%;
+    --card-foreground: 270 95% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 270 95% 10%;
+
+    --primary: 270 90% 60%;
+    /* Vibrant Brand Violet */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 270 20% 90%;
+    /* Muted violet */
+    --secondary-foreground: 270 95% 20%;
+
+    --muted: 270 20% 95%;
+    --muted-foreground: 270 10% 40%;
+
+    --accent: 85 100% 50%;
+    /* Neon Lime - High Energy */
+    --accent-foreground: 270 95% 10%;
+    /* Deep Violet on Lime */
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 270 20% 90%;
+    --input: 270 20% 90%;
+    --ring: 270 90% 60%;
+
+    --radius: 1rem;
+    /* Rounded, tactile feel */
+  }
+
+  .dark {
+    /* Tionat Premium Dark: Deep Void & Electric Lime */
+    --background: 270 50% 5%;
+    /* Deep void violet */
+    --foreground: 0 0% 98%;
+
+    --card: 270 50% 8%;
+    /* Slightly lighter void */
+    --card-foreground: 0 0% 98%;
+
+    --popover: 270 50% 8%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 270 80% 65%;
+    /* Bright Violet */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 270 30% 15%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 270 30% 15%;
+    --muted-foreground: 270 20% 60%;
+
+    --accent: 85 100% 50%;
+    /* Neon Lime */
+    --accent-foreground: 270 95% 10%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 270 30% 15%;
+    --input: 270 30% 15%;
+    --ring: 270 90% 65%;
+  }
+
+  /* Keep legacy support */
+  .tionat {
+    /* Inherits from :root by default */
+  }
+
+  .dark.tionat {
+    /* Inherits from .dark by default */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

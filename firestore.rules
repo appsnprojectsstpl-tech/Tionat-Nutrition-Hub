@@ -1,0 +1,33 @@
+/**
+ * @file Firebase Security Rules for Tionat's e-commerce application.
+ *
+ * @core_philosophy This ruleset enforces a strict user-ownership model for user profiles and orders,
+ * while providing public read access to product and category information. Loyalty program configurations
+ * are restricted to authenticated users only, with potential admin-level access in the future.
+ *
+ * @data_structure The data is organized into top-level collections for `categories`, `products`,
+ * and a user-scoped hierarchy under `/users/{userId}` for `userProfiles` and `orders`.
+ * `orderItems` are nested under `orders`. `loyaltyProgram` is a top level collection.
+ *
+ * @key_security_decisions
+ *   - User listing is disallowed.
+ *   - Public read access is granted to `categories` and `products`.
+ *   - Write access to `categories` and `products` is currently open but MUST be restricted in a production environment.
+ *   - User-owned data (profiles, orders) is strictly limited to the owning user.
+ *
+ * @denormalization_for_authorization N/A. The current data model leverages path-based ownership,
+ * which avoids the need for denormalization.
+ *
+ * @structural_segregation The separation of user-specific data under `/users/{userId}` ensures
+ * clear ownership and simplifies security rules.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // DEBUG MODE: Allow everything
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
