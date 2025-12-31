@@ -221,14 +221,20 @@ export default function CheckoutPage() {
 
     } catch (error: any) {
       console.error("Checkout Error:", error);
+      let description = "An unexpected error occurred. Please try again.";
+      if (error.code === 'functions/not-found') {
+        description = "One of the items in your cart is no longer available. Please review your cart and try again.";
+      } else if (error.code === 'functions/failed-precondition') {
+        description = "There was an issue with an item in your cart, it might be out of stock or the price has changed. Please review your cart and try again.";
+      } else if (error.message) {
+        description = error.message;
+      }
       toast({
         title: "Order Failed",
-        description: error.message || "Something went wrong.",
+        description: description,
         variant: "destructive"
       });
-    } finally {
-      setIsSubmitting(false); // Only if not redirecting? 
-      // Safety: if redirect happens, component unmounts. If error, we stop loading.
+      setIsSubmitting(false);
     }
   };
 
