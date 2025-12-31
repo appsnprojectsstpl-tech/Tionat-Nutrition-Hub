@@ -43,7 +43,10 @@ export const verifyRazorpayPayment = functions.https.onCall(async (data: any, co
 
         // 4. Verify Signature
         // In production, use functions.config().razorpay.key_secret
-        const secret = process.env.RAZORPAY_KEY_SECRET || "YOUR_TEST_SECRET";
+        const secret = process.env.RAZORPAY_KEY_SECRET;
+        if (!secret) {
+            throw new functions.https.HttpsError("internal", "Razorpay secret key is not configured.");
+        }
         const generatedSignature = crypto
             .createHmac("sha256", secret)
             .update(orderData?.payment?.gatewayOrderId + "|" + paymentId)
@@ -206,10 +209,14 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
         let gatewayOrderId = null;
         if (paymentMethod === 'RAZORPAY') {
             const Razorpay = require('razorpay');
-            const instance = new Razorpay({
-                key_id: process.env.RAZORPAY_KEY_ID || 'TEST_KEY_ID',
-                key_secret: process.env.RAZORPAY_KEY_SECRET || 'TEST_KEY_SECRET',
-            });
+            const key_id = process.env.RAZORPAY_KEY_ID;
+            const key_secret = process.env.RAZORPAY_KEY_SECRET;
+
+            if (!key_id || !key_secret) {
+                throw new functions.https.HttpsError("internal", "Razorpay keys are not configured.");
+            }
+
+            const instance = new Razorpay({ key_id, key_secret });
 
             const rzpOrder = await instance.orders.create({
                 amount: calculatedTotal * 100, // smallest currency unit
