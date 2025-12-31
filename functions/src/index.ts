@@ -150,14 +150,17 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
                 throw new functions.https.HttpsError("not-found", `Product ${item.productId} not found.`);
             }
             const productData = productDoc.data();
-            const price = productData?.price || 0;
+            if (!productData || typeof productData.price !== 'number') {
+                throw new functions.https.HttpsError("failed-precondition", `Invalid or missing price for product ${item.productId}.`);
+            }
+            const price = productData.price;
 
             // Phase 3: Check Stock here (skipping for now as per Phase 1 scope, strictly strict ordering)
 
             calculatedTotal += price * item.quantity;
             validatedItems.push({
                 productId: item.productId,
-                name: productData?.name, // Source of Truth
+                name: productData.name, // Source of Truth
                 priceAtBooking: price,   // Snapshot
                 quantity: item.quantity,
                 variantId: item.variantId || 'default'
@@ -190,7 +193,13 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
                 addressSnapshot: shippingAddress
             },
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            timeline: [{
+                state: "Created",
+                timestamp: new Date(),
+                actor: "user",
+                metadata: { userId }
+            }]
         };
 
         // 3. Create Razorpay Order if method is Razorpay
