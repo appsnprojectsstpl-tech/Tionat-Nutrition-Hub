@@ -123,7 +123,7 @@ export default function ProfilePage() {
     const { data: userProfile, isLoading: isProfileLoading, refetch } = useDoc<UserProfile>(userProfileRef);
 
     const ordersQuery = useMemoFirebase(
-        () => (firestore && user ? query(collection(firestore, `users/${user.uid}/orders`), orderBy('orderDate', 'desc')) : null),
+        () => (firestore && user ? query(collection(firestore, `users/${user.uid}/orders`), orderBy('createdAt', 'desc')) : null),
         [firestore, user]
     );
     const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(ordersQuery);
@@ -436,7 +436,7 @@ export default function ProfilePage() {
                                             orders.map(order => (
                                                 <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/profile/order-details?id=${order.id}`)}>
                                                     <TableCell className="font-medium">...{order.id.slice(-6)}</TableCell>
-                                                    <TableCell>{order.orderDate ? format(order.orderDate.toDate(), 'MMM d, yyyy') : 'N/A'}</TableCell>
+                                                    <TableCell>{order.createdAt ? format(order.createdAt.toDate(), 'MMM d, yyyy') : 'N/A'}</TableCell>
                                                     <TableCell>
                                                         <Badge variant={order.status === 'Pending' ? 'secondary' : 'default'}>{order.status}</Badge>
                                                     </TableCell>

@@ -19,7 +19,7 @@ import { ModeToggle } from './mode-toggle';
 const navLinks = [
   { href: "/", label: "Home", icon: Home },
   { href: "/categories", label: "Categories", icon: Package },
-  { href: "/profile", label: "TioRewards", icon: Award },
+  { href: "/orders", label: "Orders", icon: ShoppingBag },
   { href: "/cart", label: "Cart", icon: ShoppingCart },
   { href: "/profile", label: "Profile", icon: User },
 ];
