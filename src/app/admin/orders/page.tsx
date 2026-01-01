@@ -44,7 +44,7 @@ export default function AdminOrdersPage() {
   const { toast } = useToast();
 
   const ordersCollection = useMemoFirebase(
-    () => (firestore && user ? query(collection(firestore, 'orders'), orderBy('orderDate', 'desc')) : null),
+    () => (firestore && user ? query(collection(firestore, 'orders'), orderBy('createdAt', 'desc')) : null),
     [firestore, user]
   );
   const { data: orders, isLoading } = useCollection<Order>(ordersCollection);
@@ -111,7 +111,7 @@ export default function AdminOrdersPage() {
                     </TableCell>
                     <TableCell className="text-xs sm:text-sm">{order.shippingAddress.name}</TableCell>
                     <TableCell className="text-xs sm:text-sm">
-                      {order.orderDate ? format(order.orderDate.toDate(), 'PPpp') : 'N/A'}
+                      {order.createdAt ? format(order.createdAt.toDate(), 'PPpp') : 'N/A'}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`text-[10px] sm:text-xs ${statusColors[order.status]}`}>{order.status}</Badge>
