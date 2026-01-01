@@ -1,90 +1,68 @@
+
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useWishlist } from '@/hooks/use-wishlist';
+import { useFirestore, useAuth } from '@/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { Product } from '@/lib/types';
 import { AppHeader } from '@/components/header';
 import { ProductCard } from '@/components/product-card';
 import { Button } from '@/components/ui/button';
-import { useWishlist } from '@/hooks/use-wishlist';
-import { useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
-import { Product } from '@/lib/types';
-import { Heart, Loader2 } from 'lucide-react';
+import { Heart } from 'lucide-react';
 
 export default function WishlistPage() {
+    const { user, isUserLoading } = useAuth();
     const { wishlist, isLoading: isWishlistLoading } = useWishlist();
     const firestore = useFirestore();
     const [products, setProducts] = useState<Product[]>([]);
-    const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+    const [loadingProducts, setLoadingProducts] = useState(true);
 
     useEffect(() => {
-        const fetchWishlistProducts = async () => {
-            if (!firestore || wishlist.length === 0) {
-                setProducts([]);
-                return;
-            }
+        if (!firestore || isWishlistLoading || wishlist.length === 0) {
+            setLoadingProducts(false);
+            setProducts([]);
+            return;
+        }
 
-            setIsLoadingProducts(true);
+        const fetchProducts = async () => {
+            setLoadingProducts(true);
             try {
-                // Firestore 'in' query supports max 10 items. 
-                // If more, we need to chunk or fetch individually. 
-                // For simplicity, let's fetch in chunks of 10.
-                const chunks = [];
+                const productsRef = collection(firestore, 'products');
+                const productPromises = [];
                 for (let i = 0; i < wishlist.length; i += 10) {
-                    chunks.push(wishlist.slice(i, i + 10));
+                    const batch = wishlist.slice(i, i + 10);
+                    const q = query(productsRef, where('__name__', 'in', batch));
+                    productPromises.push(getDocs(q));
                 }
 
-                let allProducts: Product[] = [];
-
-                for (const chunk of chunks) {
-                    const q = query(
-                        collection(firestore, 'products'),
-                        where(documentId(), 'in', chunk)
-                    );
-                    const snapshot = await getDocs(q);
-                    const chunkProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-                    allProducts = [...allProducts, ...chunkProducts];
-                }
-
-                setProducts(allProducts);
+                const snapshots = await Promise.all(productPromises);
+                const fetchedProducts = snapshots.flatMap(snapshot =>
+                    snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product))
+                );
+                setProducts(fetchedProducts);
             } catch (error) {
                 console.error("Error fetching wishlist products:", error);
             } finally {
-                setIsLoadingProducts(false);
+                setLoadingProducts(false);
             }
         };
 
-        if (!isWishlistLoading) {
-            fetchWishlistProducts();
-        }
+        fetchProducts();
     }, [firestore, wishlist, isWishlistLoading]);
 
-    if (isWishlistLoading || isLoadingProducts) {
-        return (
-            <div className="min-h-screen bg-background">
-                <AppHeader />
-                <main className="container mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-[50vh]">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-                    <p className="text-muted-foreground">Loading your favorites...</p>
-                </main>
-            </div>
-        );
-    }
+    const isLoading = isUserLoading || isWishlistLoading || loadingProducts;
 
-    if (wishlist.length === 0) {
+    if (!user && !isUserLoading) {
         return (
             <div className="min-h-screen bg-background">
                 <AppHeader />
-                <main className="container mx-auto px-4 py-8 text-center flex flex-col items-center justify-center min-h-[60vh]">
-                    <div className="bg-secondary/50 p-6 rounded-full mb-6">
-                        <Heart className="h-12 w-12 text-muted-foreground" />
-                    </div>
-                    <h1 className="text-2xl md:text-3xl font-bold font-headline mb-4">Your Wishlist is Empty</h1>
-                    <p className="text-muted-foreground mb-8 max-w-md">
-                        Tap the heart icon on products you like to save them for later.
-                    </p>
-                    <Button asChild size="lg" className="rounded-xl px-8">
-                        <Link href="/">Explore Products</Link>
+                <main className="container mx-auto px-4 py-8 text-center">
+                    <h1 className="text-2xl md:text-3xl font-bold font-headline mb-6">Please Log In</h1>
+                    <p className="text-muted-foreground mb-8">You need to be logged in to view your wishlist.</p>
+                    <Button asChild>
+                        <Link href="/login?redirect=/wishlist">Login</Link>
                     </Button>
                 </main>
             </div>
@@ -95,21 +73,27 @@ export default function WishlistPage() {
         <div className="min-h-screen bg-background">
             <AppHeader />
             <main className="container mx-auto px-4 py-8">
-                <div className="flex items-center gap-3 mb-8">
-                    <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-lg">
-                        <Heart className="h-6 w-6 text-red-500 fill-red-500" />
+                <h1 className="text-2xl md:text-3xl font-bold font-headline mb-6">My Wishlist</h1>
+                {isLoading ? (
+                    <p>Loading your wishlist...</p>
+                ) : products.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {products.map(product => (
+                            <ProductCard key={product.id} product={product} />
+                        ))}
                     </div>
-                    <div>
-                        <h1 className="text-2xl font-bold font-headline">My Wishlist</h1>
-                        <p className="text-sm text-muted-foreground">{wishlist.length} Saved Items</p>
+                ) : (
+                    <div className="text-center py-16 border-2 border-dashed rounded-lg">
+                        <Heart className="mx-auto h-12 w-12 text-muted-foreground" />
+                        <h2 className="mt-6 text-xl font-semibold">Your wishlist is empty</h2>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            Browse products and click the heart to save them for later.
+                        </p>
+                        <Button asChild className="mt-6">
+                            <Link href="/">Start Shopping</Link>
+                        </Button>
                     </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
-                    {products.map((product) => (
-                        <ProductCard key={product.id} product={product} />
-                    ))}
-                </div>
+                )}
             </main>
         </div>
     );
