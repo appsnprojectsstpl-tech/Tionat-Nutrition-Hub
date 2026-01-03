@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Tionat Nutrition Hub - Project Overview
 
 This document provides a comprehensive overview of the Tionat Nutrition Hub application, detailing its features, architecture, and data model.
@@ -9,7 +8,26 @@ Tionat Nutrition Hub is a modern, full-stack e-commerce web application designed
 
 A key design choice is that the application is built with a **mobile-first, mobile-only** interface. The layout is optimized and enforced to a mobile viewport, ensuring a consistent and streamlined user experience across all devices, including desktops.
 
-## 2. Core Features Implemented
+## 2. Deployment
+
+This project is configured to be deployed as both a web application (primarily for admins) and a mobile Android application (for customers), using a single codebase.
+
+### GitHub Actions Deployment
+
+We use GitHub Actions to automate the build process for both platforms.
+
+-   **Web Build (GitHub Pages):**
+    -   The `web-deploy` job builds the Next.js app with a `basePath` configured for GitHub Pages (e.g., `/Tionat-Nutrition-Hub`).
+    -   It deploys the static export to the `gh-pages` branch.
+    -   **Web URL:** `https://appsnprojectsstpl-tech.github.io/Tionat-Nutrition-Hub/`
+
+-   **Mobile Build (Android APK):**
+    -   The `mobile-build` job builds the Next.js app without a `basePath` (for root access in the mobile webview).
+    -   It uses Capacitor to sync the web build to the Android project.
+    -   It compiles a Debug APK (`app-debug.apk`) using Gradle.
+    -   **Download APK:** Go to the "Actions" tab in the GitHub repository, click on the latest workflow run, and download the `app-debug` artifact at the bottom of the page.
+
+## 3. Core Features Implemented
 
 ### Storefront Features
 
@@ -51,7 +69,7 @@ A key design choice is that the application is built with a **mobile-first, mobi
 - **Loyalty Program Management (`/admin/loyalty`):** A settings page where admins can configure the rules for the TioRewards program, such as points earned per Rupee and tier discounts.
 - **Database Seeding (`/admin/seed`):** A utility page that allows for one-click population of the Firestore database with initial product, category, and user data.
 
-## 3. Data Structure (Firestore)
+## 4. Data Structure (Firestore)
 
 The application's data is structured and stored in **Firebase Firestore**.
 
@@ -62,6 +80,3 @@ The application's data is structured and stored in **Firebase Firestore**.
 - `/users/{userId}/orders/{orderId}`: A subcollection storing the order history for a specific user.
 - `/orders/{orderId}`: A top-level collection containing all orders from all users, intended for admin access.
 - `/loyaltyProgram/{loyaltyProgramId}`: Stores the configuration rules for the TioRewards loyalty program.
-=======
-# Tionat-Nutrition-Hub
->>>>>>> 4980f9689a9037db67f51b2be763fe157ea23e9a
