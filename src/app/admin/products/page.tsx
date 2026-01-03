@@ -347,10 +347,6 @@ export default function AdminProductsPage() {
           <span className="block sm:inline">You are not authenticated. Data will not load. Please log in first.</span>
         </div>
       )}
-      {/* DEBUG: Connection Info */}
-      <div className="text-xs text-muted-foreground p-2 border rounded border-dashed">
-        DEBUG: Project: {process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'studio-4862173023-78909'} | Auth: {user ? `Logged in as ${user.email}` : 'Signed Out'}
-      </div>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4">
         <h1 className="text-lg font-semibold md:text-2xl font-headline">Products</h1>
