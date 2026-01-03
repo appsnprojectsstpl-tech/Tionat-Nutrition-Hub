@@ -167,6 +167,23 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
             });
         }
 
+        // 1b. Fetch Financial Settings
+        let taxAmount = 0;
+        let deliveryFeeAmount = 0;
+
+        const settingsDoc = await db.collection('settings').doc('financials').get();
+        const settings = settingsDoc.data();
+
+        if (settings?.tax?.enabled && settings?.tax?.rate) {
+            taxAmount = parseFloat(((calculatedTotal * settings.tax.rate) / 100).toFixed(2));
+        }
+
+        if (settings?.deliveryFee?.enabled && settings?.deliveryFee?.amount) {
+            deliveryFeeAmount = settings.deliveryFee.amount;
+        }
+
+        const totalAmount = parseFloat((calculatedTotal + taxAmount + deliveryFeeAmount).toFixed(2));
+
         // 2. Create Firestore Order (State: CREATED)
         const orderRef = db.collection('orders').doc();
         const orderId = orderRef.id;
@@ -176,9 +193,9 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
             userId,
             financials: {
                 subtotal: calculatedTotal,
-                tax: 0, // Logic todo
-                deliveryFee: 0, // Logic todo
-                totalAmount: calculatedTotal,
+                tax: taxAmount,
+                deliveryFee: deliveryFeeAmount,
+                totalAmount: totalAmount,
                 currency: "INR"
             },
             items: validatedItems,
@@ -212,7 +229,7 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
             });
 
             const rzpOrder = await instance.orders.create({
-                amount: calculatedTotal * 100, // smallest currency unit
+                amount: Math.round(totalAmount * 100), // smallest currency unit
                 currency: "INR",
                 receipt: orderId,
                 notes: { userId }
@@ -231,7 +248,7 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
         return {
             success: true,
             orderId,
-            totalAmount: calculatedTotal,
+            totalAmount: totalAmount,
             gatewayOrderId,
             currency: "INR"
         };
