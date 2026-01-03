@@ -1,9 +1,17 @@
 
 import type { NextConfig } from 'next';
 
+const isGithubActions = process.env.GITHUB_ACTIONS || false;
+// When running in GitHub Actions for the Web Build, we want the base path.
+// For Mobile Build (even in Actions), we want root.
+// We will control this via a specific env var NEXT_PUBLIC_BASE_PATH.
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
 const nextConfig: NextConfig = {
   /* config options here */
   output: 'export',
+  // Only set basePath if it's defined (i.e. for GitHub Pages)
+  ...(basePath ? { basePath, assetPrefix: basePath } : {}),
   typescript: {
     ignoreBuildErrors: true,
   },

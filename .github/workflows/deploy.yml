@@ -1,0 +1,92 @@
+name: Deploy App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+env:
+  # The base path for the web deployment (GitHub Pages)
+  # This must match your repository name with a leading slash.
+  WEB_BASE_PATH: /Tionat-Nutrition-Hub
+
+jobs:
+  web-deploy:
+    name: 🌐 Web Deploy (GitHub Pages)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build for Web
+        env:
+          NEXT_PUBLIC_BASE_PATH: ${{ env.WEB_BASE_PATH }}
+          NODE_ENV: production
+        run: npm run build
+
+      # Add .nojekyll to bypass Jekyll processing on GitHub Pages
+      - name: Add .nojekyll
+        run: touch out/.nojekyll
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./out
+
+  mobile-build:
+    name: 📱 Android Build (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build for Mobile (Root Path)
+        env:
+          # Empty base path for mobile since it runs from root
+          NEXT_PUBLIC_BASE_PATH: ""
+          NODE_ENV: production
+        run: npm run build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build Debug APK
+        run: cd android && chmod +x gradlew && ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
