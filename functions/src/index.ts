@@ -167,6 +167,27 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
             });
         }
 
+        // 1b. Fetch Tax & Delivery Settings
+        const settingsSnap = await db.collection('settings').doc('financials').get();
+        const settings = settingsSnap.exists ? settingsSnap.data() : {};
+
+        let taxAmount = 0;
+        let deliveryFeeAmount = 0;
+
+        // Calculate Tax
+        if (settings?.tax?.enabled && typeof settings.tax.rate === 'number') {
+            // Formula: round((subtotal * rate) / 100, 2)
+            const rawTax = (calculatedTotal * settings.tax.rate) / 100;
+            taxAmount = Math.round(rawTax * 100) / 100;
+        }
+
+        // Calculate Delivery Fee
+        if (settings?.deliveryFee?.enabled && typeof settings.deliveryFee.amount === 'number') {
+            deliveryFeeAmount = settings.deliveryFee.amount;
+        }
+
+        const finalTotal = calculatedTotal + taxAmount + deliveryFeeAmount;
+
         // 2. Create Firestore Order (State: CREATED)
         const orderRef = db.collection('orders').doc();
         const orderId = orderRef.id;
@@ -176,9 +197,9 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
             userId,
             financials: {
                 subtotal: calculatedTotal,
-                tax: 0, // Logic todo
-                deliveryFee: 0, // Logic todo
-                totalAmount: calculatedTotal,
+                tax: taxAmount,
+                deliveryFee: deliveryFeeAmount,
+                totalAmount: finalTotal,
                 currency: "INR"
             },
             items: validatedItems,
@@ -212,7 +233,7 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
             });
 
             const rzpOrder = await instance.orders.create({
-                amount: calculatedTotal * 100, // smallest currency unit
+                amount: Math.round(finalTotal * 100), // smallest currency unit, rounded to ensure integer
                 currency: "INR",
                 receipt: orderId,
                 notes: { userId }
@@ -231,7 +252,7 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
         return {
             success: true,
             orderId,
-            totalAmount: calculatedTotal,
+            totalAmount: finalTotal,
             gatewayOrderId,
             currency: "INR"
         };
