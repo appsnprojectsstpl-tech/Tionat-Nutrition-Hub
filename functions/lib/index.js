@@ -100,6 +100,7 @@ exports.verifyRazorpayPayment = functions.https.onCall(async (data, context) => 
     }
 });
 exports.createOrder = functions.https.onCall(async (data, context) => {
+    var _a, _b, _c, _d;
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be logged in.");
     }
@@ -122,17 +123,32 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
                 throw new functions.https.HttpsError("not-found", `Product ${item.productId} not found.`);
             }
             const productData = productDoc.data();
-            const price = (productData === null || productData === void 0 ? void 0 : productData.price) || 0;
+            if (!productData || typeof productData.price !== 'number') {
+                throw new functions.https.HttpsError("failed-precondition", `Invalid or missing price for product ${item.productId}.`);
+            }
+            const price = productData.price;
             // Phase 3: Check Stock here (skipping for now as per Phase 1 scope, strictly strict ordering)
             calculatedTotal += price * item.quantity;
             validatedItems.push({
                 productId: item.productId,
-                name: productData === null || productData === void 0 ? void 0 : productData.name,
+                name: productData.name,
                 priceAtBooking: price,
                 quantity: item.quantity,
                 variantId: item.variantId || 'default'
             });
         }
+        // 1b. Fetch Financial Settings
+        let taxAmount = 0;
+        let deliveryFeeAmount = 0;
+        const settingsDoc = await db.collection('settings').doc('financials').get();
+        const settings = settingsDoc.data();
+        if (((_a = settings === null || settings === void 0 ? void 0 : settings.tax) === null || _a === void 0 ? void 0 : _a.enabled) && ((_b = settings === null || settings === void 0 ? void 0 : settings.tax) === null || _b === void 0 ? void 0 : _b.rate)) {
+            taxAmount = parseFloat(((calculatedTotal * settings.tax.rate) / 100).toFixed(2));
+        }
+        if (((_c = settings === null || settings === void 0 ? void 0 : settings.deliveryFee) === null || _c === void 0 ? void 0 : _c.enabled) && ((_d = settings === null || settings === void 0 ? void 0 : settings.deliveryFee) === null || _d === void 0 ? void 0 : _d.amount)) {
+            deliveryFeeAmount = settings.deliveryFee.amount;
+        }
+        const totalAmount = parseFloat((calculatedTotal + taxAmount + deliveryFeeAmount).toFixed(2));
         // 2. Create Firestore Order (State: CREATED)
         const orderRef = db.collection('orders').doc();
         const orderId = orderRef.id;
@@ -141,9 +157,9 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
             userId,
             financials: {
                 subtotal: calculatedTotal,
-                tax: 0,
-                deliveryFee: 0,
-                totalAmount: calculatedTotal,
+                tax: taxAmount,
+                deliveryFee: deliveryFeeAmount,
+                totalAmount: totalAmount,
                 currency: "INR"
             },
             items: validatedItems,
@@ -158,7 +174,13 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
                 addressSnapshot: shippingAddress
             },
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            timeline: [{
+                    state: "Created",
+                    timestamp: new Date(),
+                    actor: "user",
+                    metadata: { userId }
+                }]
         };
         // 3. Create Razorpay Order if method is Razorpay
         let gatewayOrderId = null;
@@ -169,7 +191,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
                 key_secret: process.env.RAZORPAY_KEY_SECRET || 'TEST_KEY_SECRET',
             });
             const rzpOrder = await instance.orders.create({
-                amount: calculatedTotal * 100,
+                amount: Math.round(totalAmount * 100),
                 currency: "INR",
                 receipt: orderId,
                 notes: { userId }
@@ -182,7 +204,7 @@ exports.createOrder = functions.https.onCall(async (data, context) => {
         return {
             success: true,
             orderId,
-            totalAmount: calculatedTotal,
+            totalAmount: totalAmount,
             gatewayOrderId,
             currency: "INR"
         };
