@@ -30,11 +30,43 @@ export function initializeFirebase() {
 }
 
 export function getSdks(firebaseApp: FirebaseApp) {
+  const auth = getAuth(firebaseApp);
+  const firestore = getFirestore(firebaseApp);
+  const functions = getFunctions(firebaseApp, 'us-central1');
+
+  // Connect to emulators in development
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    const { connectFunctionsEmulator } = require('firebase/functions');
+    const { connectFirestoreEmulator } = require('firebase/firestore');
+    const { connectAuthEmulator } = require('firebase/auth');
+
+    try {
+      connectFunctionsEmulator(functions, 'localhost', 5001);
+      console.log('✅ Connected to Functions Emulator');
+    } catch (e) {
+      // Already connected
+    }
+
+    try {
+      connectFirestoreEmulator(firestore, 'localhost', 8080);
+      console.log('✅ Connected to Firestore Emulator');
+    } catch (e) {
+      // Already connected
+    }
+
+    try {
+      connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+      console.log('✅ Connected to Auth Emulator');
+    } catch (e) {
+      // Already connected
+    }
+  }
+
   return {
     firebaseApp,
-    auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp),
-    functions: getFunctions(firebaseApp, 'us-central1')
+    auth,
+    firestore,
+    functions
   };
 }
 
