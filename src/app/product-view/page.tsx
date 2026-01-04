@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import type { Product } from '@/lib/types';
-import { AppHeader } from '@/components/header';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

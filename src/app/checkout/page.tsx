@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { AppHeader } from '@/components/header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -272,7 +271,6 @@ export default function CheckoutPage() {
   if (!user) {
     return (
       <div className="min-h-screen bg-background">
-        <AppHeader />
         <main className="container mx-auto px-4 py-8 text-center">
           <h1 className="text-2xl md:text-3xl font-bold font-headline mb-6">Please Log In</h1>
           <p className="text-muted-foreground mb-8">You need to be logged in to proceed to checkout.</p>
