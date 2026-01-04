@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AppHeader } from '@/components/header';
 import { ProductCard } from '@/components/product-card';
 import { Button } from '@/components/ui/button';
 import { useWishlist } from '@/hooks/use-wishlist';
@@ -62,7 +61,6 @@ export default function WishlistPage() {
     if (isWishlistLoading || isLoadingProducts) {
         return (
             <div className="min-h-screen bg-background">
-                <AppHeader />
                 <main className="container mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-[50vh]">
                     <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
                     <p className="text-muted-foreground">Loading your favorites...</p>
@@ -74,7 +72,6 @@ export default function WishlistPage() {
     if (wishlist.length === 0) {
         return (
             <div className="min-h-screen bg-background">
-                <AppHeader />
                 <main className="container mx-auto px-4 py-8 text-center flex flex-col items-center justify-center min-h-[60vh]">
                     <div className="bg-secondary/50 p-6 rounded-full mb-6">
                         <Heart className="h-12 w-12 text-muted-foreground" />
@@ -93,7 +90,6 @@ export default function WishlistPage() {
 
     return (
         <div className="min-h-screen bg-background">
-            <AppHeader />
             <main className="container mx-auto px-4 py-8">
                 <div className="flex items-center gap-3 mb-8">
                     <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-lg">

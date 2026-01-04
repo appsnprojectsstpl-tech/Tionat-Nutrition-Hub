@@ -1,6 +1,5 @@
 
 'use client';
-import { AppHeader } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CheckCircle2 } from "lucide-react";
@@ -88,7 +87,6 @@ import { useEffect } from 'react';
 export default function OrderConfirmationPage() {
     return (
         <div className="min-h-screen bg-background">
-            <AppHeader />
             <Suspense fallback={<div>Loading...</div>}>
                 <OrderConfirmationContent />
             </Suspense>
