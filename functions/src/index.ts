@@ -152,23 +152,40 @@ export const createOrder = functions.https.onCall(async (data: any, context: fun
     try {
         console.log(`[createOrder] Starting for User: ${userId}, Method: ${paymentMethod}`);
 
-        // 3. Fetch Products in Parallel (Performance Optimization)
+        // 3. Fetch Products and Inventory in Parallel (Performance Optimization)
         const productRefs = items.map((item: any) => db.collection('products').doc(item.productId));
-        const productSnaps = await db.getAll(...productRefs);
+        const inventoryRefs = items.map((item: any) => db.collection('inventory').doc(item.productId));
+
+        const allSnaps = await db.getAll(...productRefs, ...inventoryRefs);
+        const productSnaps = allSnaps.slice(0, items.length);
+        const inventorySnaps = allSnaps.slice(items.length);
 
         let calculatedTotal = 0;
         const validatedItems = [];
 
         for (let i = 0; i < items.length; i++) {
             const item = items[i];
-            const snap = productSnaps[i];
+            const productSnap = productSnaps[i];
+            const inventorySnap = inventorySnaps[i];
 
-            if (!snap.exists) {
+            if (!productSnap.exists) {
                 console.error(`[createOrder] Product not found: ${item.productId}`);
                 throw new functions.https.HttpsError("not-found", `Product "${item.name || item.productId}" is no longer available.`);
             }
 
-            const productData = snap.data();
+            // Inventory Check
+            if (!inventorySnap.exists) {
+                console.error(`[createOrder] Inventory missing for product: ${item.productId}`);
+                throw new functions.https.HttpsError("failed-precondition", `Inventory missing for "${item.name || item.productId}".`);
+            }
+
+            const currentStock = inventorySnap.data()?.stock || 0;
+            if (currentStock < item.quantity) {
+                console.warn(`[createOrder] Insufficient stock for ${item.productId}. Req: ${item.quantity}, Avail: ${currentStock}`);
+                throw new functions.https.HttpsError("failed-precondition", `Insufficient stock for "${item.name || item.productId}". Available: ${currentStock}, Requested: ${item.quantity}`);
+            }
+
+            const productData = productSnap.data();
             const price = productData?.price;
 
             // Validate Price

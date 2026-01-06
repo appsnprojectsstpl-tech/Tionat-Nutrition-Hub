@@ -1,9 +1,8 @@
 
 import * as admin from 'firebase-admin';
-import * as functions from 'firebase-functions/v1'; // Use v1 explicitly to match source
+import * as functions from 'firebase-functions/v1';
 import * as firebaseFunctionsTest from 'firebase-functions-test';
 
-// Initialize the test SDK
 const testEnv = firebaseFunctionsTest();
 
 // Mock firebase-admin
@@ -29,15 +28,14 @@ jest.mock('razorpay', () => {
   }));
 });
 
-// Import after mocking
 import { createOrder } from '../src/index';
 
 describe('createOrder', () => {
   let dbMock: any;
   let collectionMock: any;
   let docMock: any;
-  let getMock: any;
-  let setMock: any;
+  let getAllMock: any;
+  let batchMock: any;
   let wrappedCreateOrder: any;
 
   beforeAll(() => {
@@ -51,20 +49,51 @@ describe('createOrder', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Setup Firestore mock chain
-    setMock = jest.fn().mockResolvedValue({});
-    getMock = jest.fn(); // Will be customized per test
-    docMock = jest.fn(() => ({
-      get: getMock,
-      set: setMock,
-      id: 'order_123',
+    // Mock Batch
+    batchMock = {
+      set: jest.fn(),
+      update: jest.fn(),
+      commit: jest.fn().mockResolvedValue(true),
+    };
+
+    // Mock GetAll
+    getAllMock = jest.fn();
+
+    // Mock Doc (recursive to support subcollections)
+    docMock = jest.fn((id) => ({
+      id: id || 'mock_id',
+      get: jest.fn(),
+      set: jest.fn(),
+      collection: (name: string) => collectionMock(name), // Lazy binding to support recursion
     }));
-    collectionMock = jest.fn(() => ({
-      doc: docMock,
-    }));
+
+    // Mock Collection
+    collectionMock = jest.fn((name) => {
+        if (name === 'settings') {
+            return {
+                doc: jest.fn(() => ({
+                    get: jest.fn().mockResolvedValue({
+                        exists: true,
+                        data: () => ({
+                            tax: { enabled: true, rate: 10 },
+                            deliveryFee: { enabled: true, amount: 50 }
+                        })
+                    }),
+                    collection: (name: string) => collectionMock(name),
+                }))
+            }
+        }
+        return {
+            doc: docMock
+        };
+    });
+
     dbMock = {
       collection: collectionMock,
+      getAll: getAllMock,
+      batch: jest.fn(() => batchMock),
     };
+
     (admin.firestore as unknown as jest.Mock).mockReturnValue(dbMock);
   });
 
@@ -73,110 +102,131 @@ describe('createOrder', () => {
   } as functions.https.CallableContext;
 
   const validData = {
-    items: [{ productId: 'prod1', quantity: 2 }],
+    items: [{ productId: 'prod1', quantity: 2, name: 'Test Product' }],
     shippingAddress: { line1: '123 St' },
     paymentMethod: 'COD',
   };
 
-  test('should calculate tax and delivery fee when settings are enabled', async () => {
-    // Mock Product lookup & Settings
-    collectionMock.mockImplementation((collectionName: string) => {
-      if (collectionName === 'products') {
-        return {
-          doc: jest.fn(() => ({
-            get: jest.fn().mockResolvedValue({
-              exists: true,
-              data: () => ({ name: 'Test Product', price: 100 }),
-            }),
-          })),
-        };
-      }
-      if (collectionName === 'settings') {
-        return {
-          doc: jest.fn(() => ({
-            get: jest.fn().mockResolvedValue({
-              exists: true,
-              data: () => ({
-                tax: { enabled: true, rate: 18, type: 'exclusive' },
-                deliveryFee: { enabled: true, amount: 50 },
-              }),
-            }),
-          })),
-        };
-      }
-      if (collectionName === 'orders') {
-        return {
-          doc: jest.fn(() => ({
-            id: 'order_123',
-            set: setMock,
-          })),
-        };
-      }
-      return { doc: jest.fn() };
-    });
+  test('should create order successfully with correct financials', async () => {
+    // Setup getAll to return product snapshots + inventory snapshots
+    getAllMock.mockResolvedValue([
+      // Product Snap
+      {
+        exists: true,
+        data: () => ({ name: 'Test Product', price: 100, image: 'img.jpg' }),
+      },
+      // Inventory Snap (Sufficient Stock)
+      {
+        exists: true,
+        data: () => ({ stock: 10 }),
+      },
+    ]);
 
-    await wrappedCreateOrder(validData, context);
+    const result = await wrappedCreateOrder(validData, context);
 
-    // Assertions
-    // Subtotal = 100 * 2 = 200
-    // Tax = (200 * 18) / 100 = 36
-    // Delivery = 50
-    // Total = 200 + 36 + 50 = 286
+    expect(result.success).toBe(true);
+    expect(result.totalAmount).toBe(270);
 
-    expect(setMock).toHaveBeenCalledTimes(1);
-    const orderPayload = setMock.mock.calls[0][0];
-
-    expect(orderPayload.financials.subtotal).toBe(200);
-    expect(orderPayload.financials.tax).toBe(36);
-    expect(orderPayload.financials.deliveryFee).toBe(50);
-    expect(orderPayload.financials.totalAmount).toBe(286);
+    expect(batchMock.set).toHaveBeenCalledTimes(2);
+    expect(batchMock.commit).toHaveBeenCalledTimes(1);
   });
 
   test('should default tax and delivery to 0 if settings missing or disabled', async () => {
-      // Mock Product lookup
-      collectionMock.mockImplementation((collectionName: string) => {
-        if (collectionName === 'products') {
-          return {
-            doc: jest.fn(() => ({
-              get: jest.fn().mockResolvedValue({
-                exists: true,
-                data: () => ({ name: 'Test Product', price: 100 }),
-              }),
-            })),
-          };
-        }
-        if (collectionName === 'settings') {
-          return {
-            doc: jest.fn(() => ({
-              get: jest.fn().mockResolvedValue({
-                exists: true,
-                data: () => ({
-                   // Missing or disabled
-                   tax: { enabled: false, rate: 18 },
-                   deliveryFee: { enabled: false, amount: 50 },
-                }),
-              }),
-            })),
-          };
-        }
-        if (collectionName === 'orders') {
+    // Override settings mock
+    collectionMock.mockImplementation((name: string) => {
+        if (name === 'settings') {
             return {
-              doc: jest.fn(() => ({
-                id: 'order_123',
-                set: setMock,
-              })),
-            };
-          }
-        return { doc: jest.fn() };
-      });
-
-      await wrappedCreateOrder(validData, context);
-
-      const orderPayload = setMock.mock.calls[0][0];
-
-      expect(orderPayload.financials.subtotal).toBe(200);
-      expect(orderPayload.financials.tax).toBe(0);
-      expect(orderPayload.financials.deliveryFee).toBe(0);
-      expect(orderPayload.financials.totalAmount).toBe(200);
+                doc: jest.fn(() => ({
+                    get: jest.fn().mockResolvedValue({
+                        exists: true,
+                        data: () => ({
+                            tax: { enabled: false },
+                            deliveryFee: { enabled: false }
+                        })
+                    }),
+                    collection: (name: string) => collectionMock(name),
+                }))
+            }
+        }
+        return { doc: docMock };
     });
+
+    getAllMock.mockResolvedValue([
+        {
+          exists: true,
+          data: () => ({ name: 'Test Product', price: 100 }),
+        },
+        {
+          exists: true,
+          data: () => ({ stock: 10 }),
+        },
+      ]);
+
+      const result = await wrappedCreateOrder(validData, context);
+
+      // 100 * 2 = 200. Tax 0, Fee 0.
+      expect(result.totalAmount).toBe(200);
+
+      const payload = batchMock.set.mock.calls[0][1];
+      expect(payload.financials.tax).toBe(0);
+      expect(payload.financials.deliveryFee).toBe(0);
+  });
+
+  test('should throw error if product price is missing', async () => {
+    getAllMock.mockResolvedValue([
+      {
+        exists: true,
+        data: () => ({ name: 'Bad Product' }), // No price
+      },
+      {
+        exists: true,
+        data: () => ({ stock: 10 }),
+      },
+    ]);
+
+    await expect(wrappedCreateOrder(validData, context)).rejects.toThrow('Price error');
+  });
+
+  test('should throw error if product not found', async () => {
+    getAllMock.mockResolvedValue([
+      {
+        exists: false,
+      },
+      {
+        exists: true,
+        data: () => ({ stock: 10 }),
+      },
+    ]);
+
+    await expect(wrappedCreateOrder(validData, context)).rejects.toThrow('Product "Test Product" is no longer available');
+  });
+
+  test('should throw error if inventory is missing', async () => {
+    getAllMock.mockResolvedValue([
+      {
+        exists: true,
+        data: () => ({ name: 'Test Product', price: 100 }),
+      },
+      {
+        exists: false, // Inventory missing
+      },
+    ]);
+
+    await expect(wrappedCreateOrder(validData, context)).rejects.toThrow('Inventory missing');
+  });
+
+  test('should throw error if stock is insufficient', async () => {
+    getAllMock.mockResolvedValue([
+      {
+        exists: true,
+        data: () => ({ name: 'Test Product', price: 100 }),
+      },
+      {
+        exists: true,
+        data: () => ({ stock: 1 }), // Stock 1, Requested 2
+      },
+    ]);
+
+    await expect(wrappedCreateOrder(validData, context)).rejects.toThrow('Insufficient stock');
+  });
 });
