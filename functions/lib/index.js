@@ -45,7 +45,7 @@ exports.verifyRazorpayPayment = functions.https.onCall(async (data, context) => 
         }
         // 5. Update Order State & Decrement Inventory (Transaction)
         await db.runTransaction(async (transaction) => {
-            var _a;
+            var _a, _b;
             const freshOrderSnap = await transaction.get(orderRef);
             if (!freshOrderSnap.exists)
                 throw new Error("Order missing during transaction.");
@@ -58,10 +58,22 @@ exports.verifyRazorpayPayment = functions.https.onCall(async (data, context) => 
             for (const item of items) {
                 const invRef = db.collection("inventory").doc(item.productId);
                 const invSnap = await transaction.get(invRef);
+                let currentStock = 0;
                 if (!invSnap.exists) {
-                    throw new Error(`Inventory missing for ${item.name} (${item.productId})`);
+                    // Fallback: Check product doc if inventory migration not done
+                    const productRef = db.collection("products").doc(item.productId);
+                    const productSnap = await transaction.get(productRef);
+                    if (productSnap.exists) {
+                        currentStock = ((_a = productSnap.data()) === null || _a === void 0 ? void 0 : _a.stock) || 0;
+                        // We will auto-heal (create inventory doc) when we update the stock below
+                    }
+                    else {
+                        throw new Error(`Inventory missing for ${item.name} (${item.productId})`);
+                    }
                 }
-                const currentStock = ((_a = invSnap.data()) === null || _a === void 0 ? void 0 : _a.stock) || 0;
+                else {
+                    currentStock = ((_b = invSnap.data()) === null || _b === void 0 ? void 0 : _b.stock) || 0;
+                }
                 if (currentStock < item.quantity) {
                     throw new Error(`Insufficient stock for ${item.name}. Available: ${currentStock}, Requested: ${item.quantity}`);
                 }
@@ -70,7 +82,8 @@ exports.verifyRazorpayPayment = functions.https.onCall(async (data, context) => 
             // If we got here, all stock is available.
             // 1. Decrement Stock
             for (const update of inventoryUpdates) {
-                transaction.update(update.ref, { stock: update.newStock });
+                // Use set with merge: true to handle both update and creation (auto-healing)
+                transaction.set(update.ref, { stock: update.newStock }, { merge: true });
             }
             // 2. Update Order in /orders
             transaction.update(orderRef, {
