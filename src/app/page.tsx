@@ -15,6 +15,7 @@ import {
     Search,
     ChevronDown,
     User,
+    Loader2,
     Zap,
     Percent,
     Building2,
@@ -77,6 +78,8 @@ const POPULAR_SEARCHES = ["Protein", "Millet", "Cookies", "Oats", "Snacks", "Veg
 export default function Home() {
     const firestore = useFirestore();
     const [activeCategory, setActiveCategory] = useState('All');
+    const [visibleLimit, setVisibleLimit] = useState(20);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isClient, setIsClient] = useState(false);
     const categoriesToShow = ['All', 'Ready to Cook', 'Breakfast', 'Lunch', 'Dinner'];
 
@@ -116,6 +119,15 @@ export default function Home() {
         localStorage.removeItem('recentSearches');
     }
 
+    // Reset limit when category changes
+    useEffect(() => {
+        setVisibleLimit(20);
+    }, [activeCategory]);
+
+    const handleLoadMore = () => {
+        setIsLoadingMore(true);
+        setVisibleLimit(prev => prev + 20);
+    };
 
     const productsQuery = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -132,16 +144,24 @@ export default function Home() {
         }
 
         // Phase 7: Performance Limit
-        q = query(q, limit(20));
+        q = query(q, limit(visibleLimit));
 
         return q;
-    }, [firestore, activeCategory]);
+    }, [firestore, activeCategory, visibleLimit]);
 
     const { data: rawProducts, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
+
+    useEffect(() => {
+        if (!isLoadingProducts) {
+            setIsLoadingMore(false);
+        }
+    }, [isLoadingProducts]);
 
     const products = rawProducts?.filter(product =>
         product.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    const showSkeletons = isLoadingProducts && !isLoadingMore;
 
     return (
         <div className="flex flex-col min-h-screen bg-background">
@@ -273,7 +293,7 @@ export default function Home() {
                         <Link href="/categories" className="text-xs font-normal text-primary ml-auto hover:underline">View All</Link>
                     </h2>
 
-                    {isLoadingProducts && (
+                    {showSkeletons && (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             {[1, 2, 3, 4].map(i => (
                                 <div key={i} className="aspect-[4/5] rounded-3xl bg-secondary/30 animate-pulse" />
@@ -281,14 +301,36 @@ export default function Home() {
                         </div>
                     )}
 
-                    {!isLoadingProducts && products && products.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
-                            {products.map((product) => (
-                                <ProductCard key={product.id} product={product} />
-                            ))}
-                        </div>
+                    {!showSkeletons && products && products.length > 0 ? (
+                        <>
+                            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
+                                {products.map((product) => (
+                                    <ProductCard key={product.id} product={product} />
+                                ))}
+                            </div>
+
+                            {products.length >= visibleLimit && (
+                                <div className="mt-8 flex justify-center">
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleLoadMore}
+                                        className="min-w-[120px]"
+                                        disabled={isLoadingProducts}
+                                    >
+                                        {isLoadingProducts ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Loading...
+                                            </>
+                                        ) : (
+                                            'Load More'
+                                        )}
+                                    </Button>
+                                </div>
+                            )}
+                        </>
                     ) : (
-                        (!isLoadingProducts) && (
+                        (!isLoadingProducts && !products?.length) && (
                             <div className="text-center py-12">
                                 <p className="text-muted-foreground text-lg">No products found in this category.</p>
                             </div>
