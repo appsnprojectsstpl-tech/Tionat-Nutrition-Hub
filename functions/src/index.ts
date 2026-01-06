@@ -74,12 +74,23 @@ export const verifyRazorpayPayment = functions.https.onCall(async (data: any, co
             for (const item of items) {
                 const invRef = db.collection("inventory").doc(item.productId);
                 const invSnap = await transaction.get(invRef);
+                let currentStock = 0;
 
                 if (!invSnap.exists) {
-                    throw new Error(`Inventory missing for ${item.name} (${item.productId})`);
+                    // Fallback: Check product doc if inventory migration not done
+                    const productRef = db.collection("products").doc(item.productId);
+                    const productSnap = await transaction.get(productRef);
+
+                    if (productSnap.exists) {
+                        currentStock = productSnap.data()?.stock || 0;
+                        // We will auto-heal (create inventory doc) when we update the stock below
+                    } else {
+                        throw new Error(`Inventory missing for ${item.name} (${item.productId})`);
+                    }
+                } else {
+                    currentStock = invSnap.data()?.stock || 0;
                 }
 
-                const currentStock = invSnap.data()?.stock || 0;
                 if (currentStock < item.quantity) {
                     throw new Error(`Insufficient stock for ${item.name}. Available: ${currentStock}, Requested: ${item.quantity}`);
                 }
@@ -90,7 +101,8 @@ export const verifyRazorpayPayment = functions.https.onCall(async (data: any, co
             // If we got here, all stock is available.
             // 1. Decrement Stock
             for (const update of inventoryUpdates) {
-                transaction.update(update.ref, { stock: update.newStock });
+                // Use set with merge: true to handle both update and creation (auto-healing)
+                transaction.set(update.ref, { stock: update.newStock }, { merge: true });
             }
 
             // 2. Update Order in /orders
