@@ -94,6 +94,19 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
 export const useFirebase = (): FirebaseServicesAndUser => {
   const context = useContext(FirebaseContext);
 
+  if (typeof window === 'undefined') {
+    // Return mock implementation for SSR/Build
+    return {
+      firebaseApp: null as any,
+      firestore: null as any,
+      auth: null as any,
+      functions: null as any,
+      user: null,
+      isUserLoading: true,
+      userError: null
+    };
+  }
+
   if (context === undefined) {
     throw new Error('useFirebase must be used within a FirebaseProvider.');
   }

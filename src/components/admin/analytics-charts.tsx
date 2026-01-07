@@ -86,7 +86,7 @@ export function AnalyticsCharts({ orders }: AnalyticsChartsProps) {
         const productSales: Record<string, number> = {};
 
         orders.forEach(order => {
-            order.orderItems.forEach(item => {
+            (order.orderItems || []).forEach(item => {
                 const productName = item.name.length > 15 ? item.name.substring(0, 15) + '...' : item.name;
                 productSales[productName] = (productSales[productName] || 0) + item.quantity;
             });

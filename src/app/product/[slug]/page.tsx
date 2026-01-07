@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import ProductDetailClient from './client-page';
 
 // Enable dynamic params for static export
@@ -13,6 +14,14 @@ export const dynamicParams = false;
 type Props = {
   params: Promise<{ slug: string }>;
 };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  return {
+    title: `Product ${slug} | Tionat`,
+    description: `Buy ${slug} at best prices on Tionat.`,
+  };
+}
 
 export default async function ProductDetailPage({ params }: Props) {
   const { slug } = await params;

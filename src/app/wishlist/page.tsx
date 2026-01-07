@@ -18,7 +18,10 @@ export default function WishlistPage() {
 
     useEffect(() => {
         const fetchWishlistProducts = async () => {
-            if (!firestore || wishlist.length === 0) {
+            // wishlist is already an array of strings
+            const ids = wishlist;
+
+            if (!firestore || ids.length === 0) {
                 setProducts([]);
                 return;
             }
@@ -26,11 +29,10 @@ export default function WishlistPage() {
             setIsLoadingProducts(true);
             try {
                 // Firestore 'in' query supports max 10 items. 
-                // If more, we need to chunk or fetch individually. 
-                // For simplicity, let's fetch in chunks of 10.
+                // We need to chunk it.
                 const chunks = [];
-                for (let i = 0; i < wishlist.length; i += 10) {
-                    chunks.push(wishlist.slice(i, i + 10));
+                for (let i = 0; i < ids.length; i += 10) {
+                    chunks.push(ids.slice(i, i + 10));
                 }
 
                 let allProducts: Product[] = [];

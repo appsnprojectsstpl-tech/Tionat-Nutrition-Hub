@@ -1,5 +1,6 @@
 'use client';
 
+
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import type { Order } from '@/lib/types';
@@ -9,14 +10,18 @@ import {
     CardHeader,
     CardTitle,
     CardDescription,
+    CardFooter,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { doc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
-import React, { Suspense } from 'react';
+import { ArrowLeft, Loader2, XCircle } from 'lucide-react';
+import React, { Suspense, useState } from 'react';
+import { TrackingTimeline } from '@/components/tracking-timeline';
+import { useToast } from '@/hooks/use-toast';
+import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 function OrderDetailsContent() {
     const searchParams = useSearchParams();
@@ -24,10 +29,17 @@ function OrderDetailsContent() {
     const orderId = searchParams.get('id');
     const { user, isUserLoading } = useAuth();
     const firestore = useFirestore();
+    const { toast } = useToast();
+    const [isCancelling, setIsCancelling] = useState(false);
 
     const orderRef = useMemoFirebase(
         () => (firestore && user && orderId ? doc(firestore, `users/${user.uid}/orders`, orderId) : null),
         [firestore, user, orderId]
+    );
+
+    const rootOrderRef = useMemoFirebase(
+        () => (firestore && orderId ? doc(firestore, 'orders', orderId) : null),
+        [firestore, orderId]
     );
 
     const { data: order, isLoading } = useDoc<Order>(orderRef);
@@ -73,6 +85,35 @@ function OrderDetailsContent() {
         );
     }
 
+    const handleCancelOrder = async () => {
+        if (!confirm('Are you sure you want to cancel this order? It cannot be undone.')) return;
+
+        setIsCancelling(true);
+        try {
+            if (orderRef) {
+                await updateDocumentNonBlocking(orderRef, { status: 'Cancelled' });
+            }
+            if (rootOrderRef) {
+                // Best effort to update root order
+                await updateDocumentNonBlocking(rootOrderRef, { status: 'Cancelled' });
+            }
+
+            toast({
+                title: "Order Cancelled",
+                description: "Your order has been successfully cancelled.",
+            });
+        } catch (error) {
+            console.error("Cancellation error", error);
+            toast({
+                title: "Cancellation Failed",
+                description: "There was an error cancelling your order. Please try again.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsCancelling(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-background">
             <main className="container mx-auto px-4 py-8">
@@ -85,7 +126,15 @@ function OrderDetailsContent() {
                 </div>
 
                 <div className="grid gap-8 lg:grid-cols-3">
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 space-y-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Order Tracking</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <TrackingTimeline status={order.status as any} />
+                            </CardContent>
+                        </Card>
                         <Card>
                             <CardHeader>
                                 <CardTitle>Order Summary</CardTitle>
@@ -95,7 +144,7 @@ function OrderDetailsContent() {
                             </CardHeader>
                             <CardContent>
                                 <ul className="space-y-4">
-                                    {order.orderItems.map((item) => (
+                                    {(order.orderItems && Array.isArray(order.orderItems)) ? order.orderItems.map((item) => (
                                         <li key={item.productId} className="flex justify-between items-center text-sm">
                                             <div>
                                                 <p className="font-semibold">{item.name}</p>
@@ -105,13 +154,15 @@ function OrderDetailsContent() {
                                             </div>
                                             <p>{(item.quantity * item.price).toFixed(2)}</p>
                                         </li>
-                                    ))}
+                                    )) : (
+                                        <li className="text-sm text-muted-foreground">No items in this order.</li>
+                                    )}
                                 </ul>
                                 <Separator className="my-4" />
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Subtotal</span>
-                                        <span>{order.totalAmount.toFixed(2)}</span>
+                                        <span>{(order.totalAmount || 0).toFixed(2)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Shipping</span>
@@ -120,7 +171,7 @@ function OrderDetailsContent() {
                                     <Separator className="my-2" />
                                     <div className="flex justify-between font-bold text-base">
                                         <span>Total</span>
-                                        <span>{order.totalAmount.toFixed(2)}</span>
+                                        <span>{(order.totalAmount || 0).toFixed(2)}</span>
                                     </div>
                                 </div>
                             </CardContent>
@@ -138,19 +189,38 @@ function OrderDetailsContent() {
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-muted-foreground">Date</span>
-                                    <span>{order.orderDate ? format(order.orderDate.toDate(), 'PP') : 'N/A'}</span>
+                                    <span>{order.orderDate && (order.orderDate as any).toDate ? format((order.orderDate as any).toDate(), 'PP') : 'N/A'}</span>
                                 </div>
                             </CardContent>
+                            {(order.status === 'Pending') && (
+                                <CardFooter>
+                                    <Button
+                                        variant="destructive"
+                                        className="w-full"
+                                        onClick={handleCancelOrder}
+                                        disabled={isCancelling}
+                                    >
+                                        {isCancelling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
+                                        Cancel Order
+                                    </Button>
+                                </CardFooter>
+                            )}
                         </Card>
                         <Card>
                             <CardHeader>
                                 <CardTitle>Shipping Address</CardTitle>
                             </CardHeader>
                             <CardContent className="text-sm space-y-1">
-                                <p className="font-semibold">{order.shippingAddress.name}</p>
-                                <p className="text-muted-foreground">{order.shippingAddress.address}</p>
-                                <p className="text-muted-foreground">{order.shippingAddress.city}, {order.shippingAddress.pincode}</p>
-                                <p className="text-muted-foreground">Phone: {order.shippingAddress.phone}</p>
+                                {order.shippingAddress ? (
+                                    <>
+                                        <p className="font-semibold">{order.shippingAddress.name}</p>
+                                        <p className="text-muted-foreground">{order.shippingAddress.address}</p>
+                                        <p className="text-muted-foreground">{order.shippingAddress.city}, {order.shippingAddress.pincode}</p>
+                                        <p className="text-muted-foreground">Phone: {order.shippingAddress.phone}</p>
+                                    </>
+                                ) : (
+                                    <p className="text-muted-foreground">Address details not available for this order.</p>
+                                )}
                             </CardContent>
                         </Card>
                     </div>

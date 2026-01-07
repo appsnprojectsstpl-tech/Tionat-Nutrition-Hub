@@ -6,8 +6,14 @@ import { DesktopHeader } from './desktop-header';
 import { OfflineBanner } from './offline-banner';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+
+
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+    const pathname = usePathname();
+    const isAdminRoute = pathname?.startsWith('/admin');
+
     useEffect(() => {
         // Fix for Bug 4: Gesture Control / Back Button
         import('@capacitor/app').then(({ App }) => {
@@ -26,6 +32,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             });
         }
     }, []);
+
+    if (isAdminRoute) {
+        return (
+            <>
+                <main className="min-h-screen bg-muted/40">
+                    {children}
+                </main>
+                <OfflineBanner />
+            </>
+        );
+    }
 
     return (
         <>

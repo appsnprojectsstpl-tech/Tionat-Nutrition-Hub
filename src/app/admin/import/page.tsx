@@ -70,7 +70,7 @@ export default function AdminImportPage() {
         let updatedCount = 0;
         let createdCount = 0;
 
-        const productsByName = new Map(products.map(p => [p.name.toLowerCase(), p.id]));
+        const productsByName = new Map(products.map(p => [(p.name || '').toLowerCase(), p.id]));
 
         for (const row of data) {
           const name = row.name?.trim();

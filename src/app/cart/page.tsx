@@ -23,6 +23,8 @@ import { collection, query, where, limit, getDocs } from "firebase/firestore";
 import type { Product } from "@/lib/types";
 import { ProductCarousel } from "@/components/product-carousel";
 import { CouponInput } from "@/components/cart/coupon-input";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 
 function RelatedProducts() {
   const { items } = useCart();
@@ -95,13 +97,25 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex flex-col">
         {/* AppHeader removed - using AppShell global header */}
-        <main className="container mx-auto px-4 py-8 text-center">
-          <h1 className="text-2xl md:text-3xl font-bold font-headline mb-6">Your Cart is Empty</h1>
-          <p className="text-muted-foreground mb-8">Looks like you haven't added anything to your cart yet.</p>
-          <Button asChild>
-            <Link href="/">Continue Shopping</Link>
+        <main className="container mx-auto px-4 py-16 flex-1 flex flex-col items-center justify-center text-center">
+          <div className="bg-secondary/30 p-8 rounded-full mb-6">
+            <div className="relative w-40 h-40">
+              <Image
+                src="https://cdn-icons-png.flaticon.com/512/11329/11329060.png"
+                alt="Empty Cart"
+                fill
+                className="object-contain opacity-80"
+              />
+            </div>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-bold font-headline mb-3">Your Cart is Empty</h1>
+          <p className="text-muted-foreground mb-8 max-w-sm mx-auto">
+            Looks like you haven't added anything to your cart yet. Explore our fresh products and start ordering!
+          </p>
+          <Button asChild size="lg" className="rounded-xl px-8 font-bold shadow-lg shadow-primary/20">
+            <Link href="/">Start Shopping</Link>
           </Button>
         </main>
       </div>
@@ -182,6 +196,21 @@ export default function CartPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 pt-4">
+
+                {/* Free Shipping Meter */}
+                <div className="mb-4 space-y-2">
+                  {subtotal >= 500 ? (
+                    <p className="text-xs text-green-600 font-bold flex items-center gap-1">
+                      <span className="bg-green-100 p-1 rounded-full">🎉</span>
+                      You've unlocked FREE Shipping!
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Add <span className="text-primary font-bold">₹{(500 - subtotal).toFixed(0)}</span> more for <span className="text-green-600 font-bold">FREE Shipping</span>
+                    </p>
+                  )}
+                  <Progress value={Math.min((subtotal / 500) * 100, 100)} className="h-2" />
+                </div>
 
                 <div className="mb-4">
                   <CouponInput />

@@ -62,6 +62,7 @@ import { useCart } from '@/hooks/use-cart';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
+import { StoryHighlights } from '@/components/story-highlights';
 
 
 const categoryIcons = {
@@ -131,17 +132,22 @@ export default function Home() {
             }
         }
 
-        // Phase 7: Performance Limit
         q = query(q, limit(20));
 
         return q;
     }, [firestore, activeCategory]);
 
-    const { data: rawProducts, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
+    const featuredQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'products'), where('isFeatured', '==', true), limit(5));
+    }, [firestore]);
 
-    const products = rawProducts?.filter(product =>
+    const { data: rawProducts, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
+    const { data: featuredProducts } = useCollection<Product>(featuredQuery);
+
+    const products = useMemo(() => rawProducts?.filter(product =>
         product.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    ), [rawProducts, searchQuery]);
 
     return (
         <div className="flex flex-col min-h-screen bg-background">
@@ -153,22 +159,57 @@ export default function Home() {
             <main className="flex-1 pb-16 relative">
                 {/* Search moved to Global Header */}
 
+                {/* Search moved to Global Header */}
+                <StoryHighlights />
+
                 {/* Hero Carousel */}
                 <div className="mt-4 px-4 overflow-hidden">
                     <Carousel className="w-full" opts={{ loop: true }}>
                         <CarouselContent>
+                            {featuredProducts && featuredProducts.length > 0 ? (
+                                featuredProducts.map((product) => (
+                                    <CarouselItem key={product.id}>
+                                        <div className="relative h-48 w-full overflow-hidden rounded-2xl shadow-lg">
+                                            {/* Background Image with Overlay */}
+                                            {product.imageUrl ? (
+                                                <Image
+                                                    src={product.imageUrl}
+                                                    alt={product.name}
+                                                    fill
+                                                    className="object-cover transition-transform hover:scale-105 duration-700"
+                                                />
+                                            ) : (
+                                                <div className="absolute inset-0 bg-gradient-to-r from-primary to-primary/60" />
+                                            )}
+                                            <div className="absolute inset-0 bg-black/40" />
 
-                            <CarouselItem>
-                                <div className="relative h-40 w-full overflow-hidden rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 shadow-lg">
-                                    <div className="absolute inset-0 flex flex-col justify-center p-6 text-white">
-                                        <Badge className="w-fit mb-2 bg-white/20 hover:bg-white/20 border-none text-white backdrop-blur-sm">FLAT 50% OFF</Badge>
-                                        <h2 className="text-2xl font-headline font-bold leading-tight">Healthy <br /><span className="text-white">Snacks</span></h2>
-                                        <p className="text-xs text-white/80 mt-1">Millet cookies & more</p>
+                                            {/* Text Content */}
+                                            <div className="absolute inset-0 flex flex-col justify-center p-6 text-white">
+                                                <Badge className="w-fit mb-2 bg-white/20 hover:bg-white/20 border-none text-white backdrop-blur-sm">FEATURED</Badge>
+                                                <h2 className="text-2xl font-headline font-bold leading-tight line-clamp-2 text-white">{product.name}</h2>
+                                                <p className="text-sm text-white/90 mt-1 line-clamp-1">{product.description || 'Check out our special offer'}</p>
+                                                <Link href={`/product-view?slug=${product.slug}`}>
+                                                    <Button size="sm" className="mt-4 bg-white text-primary hover:bg-white/90 rounded-full font-bold">
+                                                        Shop Now
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                        </div>
+                                    </CarouselItem>
+                                ))
+                            ) : (
+                                <CarouselItem>
+                                    <div className="relative h-40 w-full overflow-hidden rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 shadow-lg">
+                                        <div className="absolute inset-0 flex flex-col justify-center p-6 text-white">
+                                            <Badge className="w-fit mb-2 bg-white/20 hover:bg-white/20 border-none text-white backdrop-blur-sm">FLAT 50% OFF</Badge>
+                                            <h2 className="text-2xl font-headline font-bold leading-tight">Healthy <br /><span className="text-white">Snacks</span></h2>
+                                            <p className="text-xs text-white/80 mt-1">Millet cookies & more</p>
+                                        </div>
+                                        <div className="absolute -right-8 -top-8 bg-white/10 w-40 h-40 rounded-full blur-3xl"></div>
+                                        <Heart className="absolute right-6 bottom-4 h-14 w-14 text-white opacity-80 rotate-12" />
                                     </div>
-                                    <div className="absolute -right-8 -top-8 bg-white/10 w-40 h-40 rounded-full blur-3xl"></div>
-                                    <Heart className="absolute right-6 bottom-4 h-14 w-14 text-white opacity-80 rotate-12" />
-                                </div>
-                            </CarouselItem>
+                                </CarouselItem>
+                            )}
                         </CarouselContent>
                     </Carousel>
                 </div>

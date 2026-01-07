@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import Image from "next/image";
+import { ImageUpload } from "@/components/image-upload";
+import { MultiImageUpload } from "@/components/multi-image-upload";
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -49,7 +51,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle, Minus, Plus } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Minus, Plus, RefreshCw, Star } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,14 +61,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from "@/lib/utils";
-import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, useUser, useFirebaseApp } from "@/firebase";
 import { collection, doc, writeBatch } from "firebase/firestore";
+import { getStorage, ref, getDownloadURL } from "firebase/storage";
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Product, Inventory } from "@/lib/types";
 import { subCategories, categories } from "@/lib/data";
 import { useToast } from '@/hooks/use-toast';
 import Papa from 'papaparse';
 
+import { InventoryStats } from "@/components/admin/inventory-stats";
 
 const productSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
@@ -74,9 +78,12 @@ const productSchema = z.object({
   categoryId: z.string().min(1, 'Category is required'),
   subcategoryId: z.string().min(1, 'Subcategory is required'),
   status: z.enum(['New Arrival', 'Coming Soon', 'Available']),
-  imageUrl: z.string().url('Please enter a valid image URL'),
+  imageUrl: z.string().optional(),
+  images: z.array(z.string()).optional(),
   stock: z.coerce.number().min(0, 'Stock cannot be negative'),
   description: z.string().optional(),
+  weight: z.string().optional(),
+  unit: z.string().optional(),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -98,6 +105,11 @@ export default function AdminProductsPage() {
   const [stockUpdates, setStockUpdates] = useState<{ [productId: string]: number | string }>({});
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [isSyncingImages, setIsSyncingImages] = useState(false);
+  const firebaseApp = useFirebaseApp();
+  const storage = getStorage(firebaseApp);
+
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
@@ -106,6 +118,7 @@ export default function AdminProductsPage() {
       price: 0,
       status: 'Available',
       imageUrl: '',
+      images: [],
       stock: 0,
       description: '',
     },
@@ -118,6 +131,7 @@ export default function AdminProductsPage() {
         price: editingProduct.price,
         stock: editingProduct.stock ?? 0,
         description: editingProduct.description || `Discover the authentic taste and convenience of our ${editingProduct.name}. Perfect for a quick, healthy, and delicious meal. Made with high-quality ingredients.`,
+        images: editingProduct.images || (editingProduct.imageUrl ? [editingProduct.imageUrl] : []),
       });
     } else {
       form.reset({
@@ -127,6 +141,7 @@ export default function AdminProductsPage() {
         subcategoryId: '',
         status: 'Available',
         imageUrl: '',
+        images: [],
         stock: 0,
         description: '',
       });
@@ -215,7 +230,7 @@ export default function AdminProductsPage() {
         let updatedCount = 0;
         let notFoundCount = 0;
 
-        const productsByName = new Map(products.map(p => [p.name.toLowerCase(), p.id]));
+        const productsByName = new Map(products.map(p => [(p.name || '').toLowerCase(), p.id]));
 
         data.forEach(row => {
           const stock = parseInt(row.stock, 10);
@@ -261,6 +276,72 @@ export default function AdminProductsPage() {
     event.target.value = '';
   };
 
+  const handleSyncImages = async () => {
+    if (!products || !firestore || !storage) return;
+    setIsSyncingImages(true);
+    let updatedCount = 0;
+    let failedCount = 0;
+
+    const batch = writeBatch(firestore);
+    let batchCount = 0;
+
+    try {
+      for (const product of products) {
+        // Check if imageUrl is a relative path (starts with /) or doesn't start with http
+        if (product.imageUrl && (product.imageUrl.startsWith('/') || !product.imageUrl.startsWith('http'))) {
+          try {
+            const imageRef = ref(storage, product.imageUrl);
+            const url = await getDownloadURL(imageRef);
+
+            const productRef = doc(firestore, 'products', product.id);
+            batch.update(productRef, { imageUrl: url });
+            batchCount++;
+            updatedCount++;
+
+            // Commit batch every 500 writes
+            if (batchCount >= 400) {
+              await batch.commit();
+              batchCount = 0;
+            }
+          } catch (error) {
+            console.error(`Failed to sync image for ${product.name}:`, error);
+            failedCount++;
+          }
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+
+      toast({
+        title: "Image Sync Complete",
+        description: `Updated ${updatedCount} images. Failed: ${failedCount}.`,
+      });
+    } catch (error) {
+      console.error("Sync failed:", error);
+      toast({
+        title: "Sync Error",
+        description: "Failed to sync images.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSyncingImages(false);
+    }
+  };
+
+  const handleToggleFeatured = (product: Product) => {
+    if (!firestore) return;
+    const productRef = doc(firestore, 'products', product.id);
+    const newFeaturedStatus = !product.isFeatured;
+    setDocumentNonBlocking(productRef, { isFeatured: newFeaturedStatus }, { merge: true });
+
+    toast({
+      title: newFeaturedStatus ? "Product Featured" : "Product Un-featured",
+      description: `${product.name} has been ${newFeaturedStatus ? 'added to' : 'removed from'} the Home Page slider.`,
+    });
+  };
+
   const productData = useMemo(() => {
     if (!products || !inventory) return [];
 
@@ -273,8 +354,13 @@ export default function AdminProductsPage() {
         stock,
         stockStatus,
       };
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [products, inventory]);
+
+  const filteredProducts = useMemo(() => {
+    if (selectedCategory === 'All') return productData;
+    return productData.filter(p => p.categoryId === selectedCategory);
+  }, [productData, selectedCategory]);
 
   const isLoading = isLoadingProducts || isLoadingInventory;
 
@@ -282,8 +368,19 @@ export default function AdminProductsPage() {
     if (!firestore) return;
 
     const { stock, ...productData } = data;
+
+    // Set default unit if weight is present but unit is not
+    if (productData.weight && !productData.unit) {
+      productData.unit = 'g';
+    }
+
     const slug = createSlug(productData.name);
     const description = productData.description || `Discover the authentic taste and convenience of our ${productData.name}. Perfect for a quick, healthy, and delicious meal. Made with high-quality ingredients.`;
+
+    // Ensure imageUrl is set from the first image if available
+    if (productData.images && productData.images.length > 0) {
+      productData.imageUrl = productData.images[0];
+    }
 
     if (editingProduct) {
       // Update existing product
@@ -339,9 +436,9 @@ export default function AdminProductsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4">
-        <h1 className="text-lg font-semibold md:text-2xl font-headline">Products</h1>
+        <h1 className="text-3xl font-bold font-headline tracking-tight">Products</h1>
         <div className="flex items-center gap-2 ml-auto">
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
@@ -388,6 +485,45 @@ export default function AdminProductsPage() {
                       </FormItem>
                     )}
                   />
+                  <div className="flex gap-4">
+                    <FormField
+                      control={form.control}
+                      name="weight"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormLabel>Weight/Qty</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. 500" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="unit"
+                      render={({ field }) => (
+                        <FormItem className="w-24">
+                          <FormLabel>Unit</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} defaultValue="g">
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Unit" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="g">g</SelectItem>
+                              <SelectItem value="kg">kg</SelectItem>
+                              <SelectItem value="ml">ml</SelectItem>
+                              <SelectItem value="L">L</SelectItem>
+                              <SelectItem value="pcs">pcs</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                   <FormField
                     control={form.control}
                     name="stock"
@@ -465,12 +601,16 @@ export default function AdminProductsPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="imageUrl"
+                    name="images"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Image URL</FormLabel>
+                        <FormLabel>Product Gallery (Front, Back, etc.)</FormLabel>
                         <FormControl>
-                          <Input placeholder="https://example.com/image.jpg" {...field} />
+                          <MultiImageUpload
+                            value={field.value || []}
+                            onChange={field.onChange}
+                            disabled={isLoading}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -493,6 +633,44 @@ export default function AdminProductsPage() {
         <Input id="csv-upload" type="file" accept=".csv" onChange={handleBulkUpdate} disabled={isBulkUpdating} className="text-xs" />
         {isBulkUpdating && <p className="text-xs text-muted-foreground mt-2">Processing file...</p>}
       </Card>
+
+      <Card className="p-4 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-medium">Sync Storage URLs</h3>
+          <p className="text-xs text-muted-foreground">Fix broken images by resolving storage paths to public URLs.</p>
+        </div>
+        <Button size="sm" variant="secondary" onClick={handleSyncImages} disabled={isSyncingImages}>
+          <RefreshCw className={cn("h-4 w-4 mr-2", isSyncingImages && "animate-spin")} />
+          {isSyncingImages ? 'Syncing...' : 'Sync Images'}
+        </Button>
+      </Card>
+
+      {/* Inventory Stats */}
+      <InventoryStats products={products || []} inventory={inventory || []} />
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 pb-2">
+        <Button
+          variant={selectedCategory === 'All' ? 'default' : 'outline'}
+          size="sm"
+          className="rounded-full"
+          onClick={() => setSelectedCategory('All')}
+        >
+          All Products
+        </Button>
+        {categories.map(cat => (
+          <Button
+            key={cat.id}
+            variant={selectedCategory === cat.id ? 'default' : 'outline'}
+            size="sm"
+            className="rounded-full"
+            onClick={() => setSelectedCategory(cat.id)}
+          >
+            {cat.name}
+          </Button>
+        ))}
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>Product Catalog & Inventory</CardTitle>
@@ -507,20 +685,24 @@ export default function AdminProductsPage() {
                 <TableHead className="hidden w-[64px] sm:table-cell">
                   Image
                 </TableHead>
+                <TableHead>Featured</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden md:table-cell">Price</TableHead>
                 <TableHead>Stock Status</TableHead>
-                <TableHead className="text-right">Stock</TableHead>
+                <TableHead className="w-[150px]">Stock Level</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
                 <TableHead className="sticky right-0 bg-card">
                   <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && <TableRow><TableCell colSpan={7} className="text-center py-4">Loading products...</TableCell></TableRow>}
-              {productData?.map((product) => {
+              {isLoading && <TableRow><TableCell colSpan={8} className="text-center py-4">Loading products...</TableCell></TableRow>}
+              {filteredProducts?.map((product) => {
                 const productWithStock = { ...product, stock: product.stock ?? 0 };
+                const stockPercent = Math.min(((product.stock ?? 0) / 100) * 100, 100);
+
                 return (
                   <TableRow key={product.id}>
                     <TableCell className="hidden sm:table-cell py-2">
@@ -534,6 +716,16 @@ export default function AdminProductsPage() {
                         />
                       )}
                     </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50"
+                        onClick={() => handleToggleFeatured(product)}
+                      >
+                        <Star className={cn("h-4 w-4", product.isFeatured ? "fill-current" : "")} />
+                      </Button>
+                    </TableCell>
                     <TableCell className="font-medium text-xs sm:text-sm">{product.name}</TableCell>
                     <TableCell>
                       <Badge variant={product.status === 'New Arrival' ? 'default' : 'secondary'} className={cn('text-[10px] sm:text-xs', product.status === 'Coming Soon' && 'bg-muted text-muted-foreground')}>
@@ -541,12 +733,25 @@ export default function AdminProductsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="hidden md:table-cell">
-                      {product.price.toFixed(2)}
+                      {(product.price || 0).toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <Badge variant={product.stockStatus === 'Out of Stock' ? 'destructive' : product.stockStatus === 'Low Stock' ? 'secondary' : 'default'} className={cn('text-[10px] sm:text-xs', product.stockStatus === 'Low Stock' && 'bg-yellow-200 text-yellow-800 hover:bg-yellow-200/80')}>
                         {product.stockStatus}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 flex-1 bg-secondary rounded-full overflow-hidden w-20">
+                          <div
+                            className={cn("h-full rounded-full",
+                              stockPercent < 10 ? "bg-red-500" :
+                                stockPercent < 30 ? "bg-yellow-500" : "bg-green-500"
+                            )}
+                            style={{ width: `${stockPercent}%` }}
+                          />
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <Popover open={openPopoverId === product.id} onOpenChange={(isOpen) => {
@@ -558,7 +763,7 @@ export default function AdminProductsPage() {
                         }
                       }}>
                         <PopoverTrigger asChild>
-                          <Button variant="outline" size="sm" className="w-16 sm:w-20 justify-center">{product.stock}</Button>
+                          <Button variant="outline" size="sm" className="w-16 sm:w-20 justify-center h-7 text-xs">{product.stock}</Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-64 p-4 mr-4">
                           <div className="grid gap-4">
@@ -613,9 +818,9 @@ export default function AdminProductsPage() {
                   </TableRow>
                 )
               })}
-              {!isLoading && productData.length === 0 && (
+              {!isLoading && filteredProducts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-4">No products found. Add one to get started.</TableCell>
+                  <TableCell colSpan={8} className="text-center py-4">No products found matching filters.</TableCell>
                 </TableRow>
               )}
             </TableBody>

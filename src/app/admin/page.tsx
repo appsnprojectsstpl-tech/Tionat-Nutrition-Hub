@@ -143,7 +143,7 @@ export default function AdminDashboard() {
                   recentOrders.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell>
-                        <div className="font-medium">{order.shippingAddress.name}</div>
+                        <div className="font-medium">{order.shippingAddress?.name || 'Unknown User'}</div>
                         <div className="hidden text-sm text-muted-foreground md:inline">
                           user-email-placeholder@example.com
                         </div>
@@ -156,7 +156,7 @@ export default function AdminDashboard() {
                           {order.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">{order.totalAmount.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{(order.totalAmount || 0).toFixed(2)}</TableCell>
                     </TableRow>
                   ))
                 ) : (

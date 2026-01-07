@@ -20,6 +20,8 @@ import { cn } from '@/lib/utils';
 import { useCart } from '@/hooks/use-cart';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useState } from 'react';
+import { ProductReviews } from '@/components/product-reviews';
+import { NutritionHighlights } from '@/components/nutrition-highlights';
 
 type Props = {
     slug: string;
@@ -146,7 +148,10 @@ export default function ProductDetailClient({ slug }: Props) {
                                     </Badge>
                                 )}
                                 <h1 className="font-headline text-2xl md:text-4xl font-bold leading-tight">{product.name}</h1>
-                                <p className="text-sm text-muted-foreground mt-1">500g (Mock)</p>
+                                {product.weight && (
+                                    <p className="text-sm text-muted-foreground mt-1">{product.weight} {product.unit || 'g'}</p>
+                                )}
+                                <NutritionHighlights product={product} />
                             </div>
                             <div className="flex flex-col items-end">
                                 <div className="bg-primary/10 text-primary text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 mb-1">
@@ -191,6 +196,9 @@ export default function ProductDetailClient({ slug }: Props) {
                         </div>
                     </div>
                 </div>
+
+                {/* Reviews Section */}
+                <ProductReviews productId={product.id} />
 
                 {/* Related Products */}
                 {relatedProducts.length > 0 && (

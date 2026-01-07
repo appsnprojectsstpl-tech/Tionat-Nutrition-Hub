@@ -31,6 +31,7 @@ import { Order } from "@/lib/types";
 import { format } from 'date-fns';
 import { MoreHorizontal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { OrderSummaryBoard } from "@/components/admin/order-summary-board";
 
 const statusColors: { [key: string]: string } = {
   Pending: 'bg-yellow-100 text-yellow-800',
@@ -80,8 +81,9 @@ export default function AdminOrdersPage() {
 
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold md:text-2xl font-headline">Orders</h1>
+    <div className="flex flex-col gap-6">
+      <h1 className="text-3xl font-bold font-headline tracking-tight">Orders</h1>
+      <OrderSummaryBoard orders={orders || []} />
       <Card>
         <CardHeader>
           <CardTitle>All Orders</CardTitle>
@@ -109,14 +111,14 @@ export default function AdminOrdersPage() {
                     <TableCell className="font-medium text-xs sm:text-sm">
                       <span>{order.id.substring(0, 8)}...</span>
                     </TableCell>
-                    <TableCell className="text-xs sm:text-sm">{order.shippingAddress.name}</TableCell>
+                    <TableCell className="text-xs sm:text-sm">{order.shippingAddress?.name || 'Unknown'}</TableCell>
                     <TableCell className="text-xs sm:text-sm">
                       {order.orderDate ? format(order.orderDate.toDate(), 'PPpp') : 'N/A'}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`text-[10px] sm:text-xs ${statusColors[order.status]}`}>{order.status}</Badge>
                     </TableCell>
-                    <TableCell className="text-right text-xs sm:text-sm">{order.totalAmount.toFixed(2)}</TableCell>
+                    <TableCell className="text-right text-xs sm:text-sm">{(order.totalAmount || 0).toFixed(2)}</TableCell>
                     <TableCell className="sticky right-0 bg-card">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

@@ -10,16 +10,17 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCart } from '@/hooks/use-cart';
-import { useAuth, useFirestore, useFunctions } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
+import { useAuth, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc, writeBatch, serverTimestamp, increment } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { UserProfile } from '@/lib/types';
+import { UserProfile, Order } from '@/lib/types';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import Image from 'next/image';
 import { useDoc, useMemoFirebase } from '@/firebase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch'; // Added switch for points
+import { Award } from 'lucide-react'; // Added icon for points
 
 // Razorpay type definitions
 interface RazorpayResponse {
@@ -54,7 +55,6 @@ declare global {
   }
 }
 
-
 const shippingSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   address: z.string().min(5, { message: "Address is required." }),
@@ -73,6 +73,13 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [redeemPoints, setRedeemPoints] = useState(false); // State for redeeming points
+
+  const POINTS_PER_RUPEE = 0.01; // 1 point per 100 rupees (example logic adjusted? Task said 1 pt per 100rs)
+  // Actually task said: "Earn 1 pt per ₹100". "Redeem 10 pts = ₹1".
+
+  // Earning Calculation: Total / 100
+  // Redemption Calculation: Points / 10 = Discount Rupees.
 
   const userProfileRef = useMemoFirebase(
     () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
@@ -115,8 +122,6 @@ export default function CheckoutPage() {
     }
   }, [userProfile, setValue])
 
-  const functions = useFunctions();
-
   const handleAddressSelect = (selectedAddress: string) => {
     const [address, city, pincode] = selectedAddress.split(',').map(s => s.trim());
     setValue('address', address || '');
@@ -125,18 +130,48 @@ export default function CheckoutPage() {
   }
 
   const handlePayment = async (formData: ShippingFormData) => {
-    if (!user || !functions) return;
+    if (!user || !firestore) return;
     setIsSubmitting(true);
 
     try {
-      // 1. Create Order Server-Side
-      const createOrderFn = httpsCallable(functions, 'createOrder');
-      const { data: orderResponse } = await createOrderFn({
-        items: items.map(item => ({
-          productId: item.product.id,
-          quantity: item.quantity,
-          variantId: 'default' // Add if supported
-        })),
+      // 1. Create Order Client-Side (No Backend Function)
+      // NOTE: Logic moved here as per user request to avoid backend functions
+
+      const orderRef = doc(collection(firestore, 'orders'));
+      const orderId = orderRef.id;
+
+      // Fees
+      const deliveryFee = 0; // Hardcoded free for now or from settings
+      const tax = 0; // Simplified
+
+      // Loyalty Calculation
+      let loyaltyDiscount = 0;
+      let pointsToDeduct = 0;
+      if (redeemPoints && userProfile?.loyaltyPoints) {
+        // Redemption: 10 pts = 1 Rupee
+        // Max redeemable: min(UserPoints, Total * 10) logic? 
+        // Let's keep it simple: Redeem all available or up to total value
+
+        const potentialDiscount = userProfile.loyaltyPoints / 10;
+        // Discount cannot exceed total (after coupon)
+        loyaltyDiscount = Math.min(potentialDiscount, total);
+        pointsToDeduct = Math.ceil(loyaltyDiscount * 10);
+      }
+
+      // Final Total Logic
+      // "total" from useCart already has coupon discount.
+      // We need to apply loyalty discount on top of that.
+      const finalPayable = total - loyaltyDiscount;
+
+      // Points Earned: 1 pt per 100 Rs spent (on final amount)
+      const pointsEarned = Math.floor(finalPayable / 100);
+
+      const orderPayload: Order = {
+        id: orderId,
+        userId: user.uid,
+        orderDate: serverTimestamp(),
+        totalAmount: finalPayable,
+        status: 'Pending',
         shippingAddress: {
           name: formData.name,
           address: formData.address,
@@ -144,12 +179,55 @@ export default function CheckoutPage() {
           pincode: formData.pincode,
           phone: formData.phone
         },
-        paymentMethod: formData.paymentMethod
-      }) as any;
+        orderItems: items.map(item => ({
+          productId: item.product.id,
+          name: item.product.name,
+          price: item.product.price,
+          quantity: item.quantity,
+          image: item.product.imageUrl
+        })),
+        paymentMethod: formData.paymentMethod,
+        discountApplied: discountAmount + loyaltyDiscount,
+        couponCode: coupon ? coupon.code : null,
+      };
 
-      const { success, orderId, gatewayOrderId, totalAmount } = orderResponse;
+      // Batch Write
+      const batch = writeBatch(firestore);
+      batch.set(orderRef, orderPayload);
 
-      if (!success) throw new Error("Order creation failed on server.");
+      const userOrderRef = doc(firestore, `users/${user.uid}/orders`, orderId);
+      batch.set(userOrderRef, orderPayload);
+
+      // Increment Coupon Usage (Client Side - Optimistic)
+      if (coupon && coupon.id) {
+        const couponRef = doc(firestore, 'coupons', coupon.id);
+        batch.update(couponRef, { usedCount: increment(1) });
+      }
+
+      // 3. Create Notification
+      const notificationRef = doc(collection(firestore, `users/${user.uid}/notifications`));
+      batch.set(notificationRef, {
+        title: "Order Placed",
+        body: `Your order #${orderId.slice(0, 6)} has been successfully placed.`,
+        type: 'order',
+        isRead: false,
+        createdAt: serverTimestamp(),
+        link: `/order-confirmation?orderId=${orderId}`
+      });
+
+      // 4. Update Loyalty Points (Deduct used, Add earned)
+      if (userProfileRef) {
+        let pointChange = pointsEarned;
+        if (pointsToDeduct > 0) {
+          pointChange -= pointsToDeduct;
+        }
+        // Using increment with negative or positive value
+        batch.update(userProfileRef, {
+          loyaltyPoints: increment(pointChange)
+        });
+      }
+
+      await batch.commit();
 
       // 2. Handle Payment Flow
       if (formData.paymentMethod === 'COD') {
@@ -159,78 +237,49 @@ export default function CheckoutPage() {
       }
 
       if (formData.paymentMethod === 'RAZORPAY') {
-        const options: RazorpayOptions = {
-          key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Ensure this env var is set
-          amount: (totalAmount * 100).toString(),
-          currency: 'INR',
-          name: 'Tionat Nutrition Hub',
-          description: 'Order Payment',
-          order_id: gatewayOrderId,
-          handler: async function (response: RazorpayResponse) {
-            try {
-              const verifyPaymentFn = httpsCallable(functions, 'verifyRazorpayPayment');
-              await verifyPaymentFn({
-                orderId,
-                paymentId: response.razorpay_payment_id,
-                signature: response.razorpay_signature
-              });
+        // IMPORTANT: Razorpay Order Creation normally requires Secret Key (Server Side).
+        // Client-side only implementation cannot create a Razorpay Order ID securely.
+        // We will use a dummy order ID or skip this step if strictly client-side.
+        // Ideally, we need a lightweight API route just for Razorpay Order creation if not Cloud Functions.
+        // IF the user insisted on "No function", they might mean "No complex business logic function".
+        // BUT Razorpay standard integration REQUIRES server for Order ID generation.
+        // Assuming we simply fallback to Test Mode or basic integration without Order ID (Legacy) or user has an API route?
+        // Since I cannot create easy API routes without deploying, I will alert user.
 
-              clearCart();
-              router.push(`/order-confirmation?orderId=${orderId}`);
-            } catch (verifyError: any) {
-              console.error("Verification failed", verifyError);
-              toast({
-                title: "Payment Verification Failed",
-                description: "Contact support if money was deducted.",
-                variant: "destructive"
-              });
-            }
-          },
-          prefill: {
-            name: formData.name,
-            email: user.email || '',
-            contact: formData.phone,
-          },
-          theme: {
-            color: '#FF7849',
-          },
-          modal: {
-            ondismiss: function () {
-              setIsSubmitting(false);
-              toast({
-                title: "Payment Cancelled",
-                description: "You cancelled the payment process.",
-              });
-            }
-          }
-        };
-
-        const paymentObject = new window.Razorpay(options);
-        paymentObject.on('payment.failed', function (response: any) {
-          setIsSubmitting(false);
-          console.error("Payment Failed", response.error);
-          toast({
-            title: "Payment Failed",
-            description: response.error.description || "Payment could not be completed.",
-            variant: "destructive"
-          });
+        toast({
+          title: "Razorpay Configuration",
+          description: "Online payment requires a backend to generate Order ID. Please use COD for client-only mode.",
+          variant: "destructive"
         });
-        paymentObject.open();
+        setIsSubmitting(false);
+        return;
+
+        /*
+          // Legacy / Insecure Client-Side Only Flow (Not recommended but possible for simple testing):
+          const options = {
+              key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+              amount: (total * 100).toString(),
+              currency: "INR",
+              name: "Tionat Nutrition",
+              handler: async (response) => {
+                   // Verify manually or update order
+                   await setDocumentNonBlocking(orderRef, { 
+                       status: 'Paid', 
+                       'payment.status': 'SUCCESS',
+                       'payment.gatewayPaymentId': response.razorpay_payment_id 
+                   }, { merge: true });
+                    clearCart();
+                    router.push(`/order-confirmation?orderId=${orderId}`);
+              }
+          }
+        */
       }
 
     } catch (error: any) {
       console.error("Checkout Error:", error);
-      let description = "An unexpected error occurred. Please try again.";
-      if (error.code === 'functions/not-found') {
-        description = "One of the items in your cart is no longer available. Please review your cart and try again.";
-      } else if (error.code === 'functions/failed-precondition') {
-        description = "There was an issue with an item in your cart, it might be out of stock or the price has changed. Please review your cart and try again.";
-      } else if (error.message) {
-        description = error.message;
-      }
       toast({
         title: "Order Failed",
-        description: description,
+        description: error.message || "Could not place order.",
         variant: "destructive"
       });
       setIsSubmitting(false);
@@ -252,15 +301,11 @@ export default function CheckoutPage() {
     await handlePayment(data);
   };
 
-
-
-
   const isLoading = isUserLoading || isProfileLoading;
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-
         <main className="container mx-auto px-4 py-8 text-center">
           <p>Loading user information...</p>
         </main>
@@ -282,10 +327,8 @@ export default function CheckoutPage() {
     )
   }
 
-
   return (
     <div className="min-h-screen bg-background">
-
       <main className="container mx-auto px-4 py-8">
         <h1 className="text-2xl md:text-3xl font-bold font-headline mb-6">Checkout</h1>
         <form onSubmit={handleSubmit(onSubmit)} className="grid gap-8 lg:grid-cols-3">
@@ -406,13 +449,40 @@ export default function CheckoutPage() {
                   <span>Shipping</span>
                   <span>Free</span>
                 </div>
+
+                {/* Loyalty Section in Summary */}
+                {userProfile?.loyaltyPoints && userProfile.loyaltyPoints > 0 && (
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="redeem-points"
+                        checked={redeemPoints}
+                        onCheckedChange={setRedeemPoints}
+                      />
+                      <Label htmlFor="redeem-points" className="text-sm cursor-pointer flex items-center">
+                        <Award className="w-4 h-4 mr-1 text-yellow-500" />
+                        Use {userProfile.loyaltyPoints} Points
+                      </Label>
+                    </div>
+                    {redeemPoints && (
+                      <span className="text-sm text-green-600">- {(Math.min(userProfile.loyaltyPoints / 10, total)).toFixed(2)}</span>
+                    )}
+                  </div>
+                )}
+
+
                 <Separator />
                 <div className="flex justify-between font-bold">
                   <span>Total</span>
-                  <span>{total.toFixed(2)}</span>
+                  <span>
+                    {(redeemPoints && userProfile?.loyaltyPoints
+                      ? Math.max(0, total - (userProfile.loyaltyPoints / 10))
+                      : total).toFixed(2)
+                    }
+                  </span>
                 </div>
                 <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
-                  {isSubmitting ? 'Processing...' : (paymentMethod === 'COD' ? `Place Order (COD) - ₹${total.toFixed(2)}` : `Proceed to Pay - ₹${total.toFixed(2)}`)}
+                  {isSubmitting ? 'Processing...' : (paymentMethod === 'COD' ? `Place Order (COD)` : `Proceed to Pay`)}
                 </Button>
                 <p className="text-xs text-center text-muted-foreground mt-2">
                   By placing this order, you agree to our terms of service.

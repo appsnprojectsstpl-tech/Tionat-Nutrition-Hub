@@ -44,11 +44,11 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Star, ChevronRight, LogOut, Shield, Edit, Home, Trash2, PlusCircle } from "lucide-react";
+import { Star, ChevronRight, LogOut, Shield, Edit, Home, Trash2, PlusCircle, ShoppingBag, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth, useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
-import { doc, collection, query, orderBy, arrayUnion, arrayRemove } from "firebase/firestore";
-import type { UserProfile, Order } from "@/lib/types";
+import { doc, collection, query, orderBy, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
+import type { UserProfile, Order, Product } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { useToast } from '@/hooks/use-toast';
@@ -56,6 +56,7 @@ import { format } from 'date-fns';
 import { signOut } from 'firebase/auth';
 import { AddressDialog } from '@/components/address-dialog';
 import { useAddress } from '@/providers/address-provider';
+import { useCart } from '@/hooks/use-cart';
 
 // Component to display address list using AddressProvider
 function AddressListComponent({ onDelete, onRefetch }: { onDelete: (address: string) => void, onRefetch: () => void }) {
@@ -114,13 +115,14 @@ export default function ProfilePage() {
     const firestore = useFirestore();
     const router = useRouter();
     const { toast } = useToast();
+    const { addToCart } = useCart();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
     const userProfileRef = useMemoFirebase(
         () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
         [firestore, user]
     );
-    const { data: userProfile, isLoading: isProfileLoading, refetch } = useDoc<UserProfile>(userProfileRef);
+    const { data: userProfile, isLoading: isProfileLoading } = useDoc<UserProfile>(userProfileRef);
 
     const ordersQuery = useMemoFirebase(
         () => (firestore && user ? query(collection(firestore, `users/${user.uid}/orders`), orderBy('orderDate', 'desc')) : null),
@@ -192,7 +194,41 @@ export default function ProfilePage() {
                 description: 'The selected address has been deleted.',
                 variant: 'destructive'
             });
-            refetch();
+            // Refetch not available on hook, but updateDocumentNonBlocking should trigger listener update
+        }
+    };
+
+    const handleReorder = async (e: React.MouseEvent, order: Order) => {
+        e.stopPropagation(); // Prevent row click
+        if (!firestore) return;
+
+        toast({
+            title: "Reordering...",
+            description: "Adding items to your cart.",
+        });
+
+        let addedCount = 0;
+        for (const item of order.orderItems) {
+            try {
+                const productDoc = await getDoc(doc(firestore, 'products', item.productId));
+                if (productDoc.exists()) {
+                    const productData = { id: productDoc.id, ...productDoc.data() } as Product;
+                    addToCart(productData, item.quantity);
+                    addedCount++;
+                }
+            } catch (e) {
+                console.error("Failed to fetch product for reorder", e);
+            }
+        }
+
+        if (addedCount > 0) {
+            router.push('/cart');
+        } else {
+            toast({
+                title: "Reorder Failed",
+                description: "Could not find products to reorder.",
+                variant: "destructive"
+            });
         }
     };
 
@@ -363,7 +399,7 @@ export default function ProfilePage() {
                                     <CardTitle className="font-headline">Manage Addresses</CardTitle>
                                     <CardDescription>Add or remove your delivery addresses.</CardDescription>
                                 </div>
-                                <AddressDialog onSave={refetch}>
+                                <AddressDialog onSave={() => { }}>
                                     <Button variant="outline" size="sm">
                                         <PlusCircle className="mr-2 h-4 w-4" />
                                         Add New
@@ -371,7 +407,7 @@ export default function ProfilePage() {
                                 </AddressDialog>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <AddressListComponent onDelete={handleDeleteAddress} onRefetch={refetch} />
+                                <AddressListComponent onDelete={handleDeleteAddress} onRefetch={() => { }} />
                             </CardContent>
                         </Card>
 
@@ -436,21 +472,40 @@ export default function ProfilePage() {
                                             orders.map(order => (
                                                 <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/profile/order-details?id=${order.id}`)}>
                                                     <TableCell className="font-medium">...{order.id.slice(-6)}</TableCell>
-                                                    <TableCell>{order.orderDate ? format(order.orderDate.toDate(), 'MMM d, yyyy') : 'N/A'}</TableCell>
+                                                    <TableCell>{order.orderDate && (order.orderDate as any).toDate ? format((order.orderDate as any).toDate(), 'MMM d, yyyy') : 'N/A'}</TableCell>
                                                     <TableCell>
                                                         <Badge variant={order.status === 'Pending' ? 'secondary' : 'default'}>{order.status}</Badge>
                                                     </TableCell>
-                                                    <TableCell className="text-right">{order.totalAmount.toFixed(2)}</TableCell>
+                                                    <TableCell className="text-right">{(order.totalAmount || 0).toFixed(2)}</TableCell>
                                                     <TableCell className="text-right">
-                                                        <ChevronRight className="h-4 w-4" />
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={(e) => handleReorder(e, order)}
+                                                            title="Buy Again"
+                                                        >
+                                                            <RefreshCw className="h-4 w-4" />
+                                                        </Button>
+                                                        <ChevronRight className="h-4 w-4 ml-2 inline-block" />
                                                     </TableCell>
                                                 </TableRow>
                                             ))
                                         ) : (
                                             !isLoadingOrders && (
                                                 <TableRow>
-                                                    <TableCell colSpan={5} className="text-center text-muted-foreground">
-                                                        You haven't placed any orders yet.
+                                                    <TableCell colSpan={5} className="h-48 text-center">
+                                                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                                                            <div className="bg-secondary/30 p-4 rounded-full mb-3">
+                                                                <ShoppingBag className="h-8 w-8 text-muted-foreground opacity-50" />
+                                                            </div>
+                                                            <h3 className="font-semibold text-lg mb-1">No orders yet</h3>
+                                                            <p className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto">
+                                                                Start ordering your favorite healthy snacks and meals today!
+                                                            </p>
+                                                            <Button asChild variant="outline" size="sm">
+                                                                <Link href="/">Browse Products</Link>
+                                                            </Button>
+                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
                                             )

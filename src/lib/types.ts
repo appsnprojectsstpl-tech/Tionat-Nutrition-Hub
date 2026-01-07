@@ -25,6 +25,12 @@ export type Product = {
   subcategoryId: string;
   status: ProductStatus;
   imageUrl: string;
+  images?: string[]; // Array of additional image URLs (e.g. front, back, side)
+  isFeatured?: boolean;
+  rating?: number;
+  reviewCount?: number;
+  weight?: string; // e.g., "500"
+  unit?: string; // e.g., "g", "kg", "ml"
 };
 
 export type Inventory = {
@@ -42,7 +48,6 @@ export type UserProfile = {
   avatarUrl?: string;
   loyaltyTier?: 'Bronze' | 'Silver' | 'Gold';
   loyaltyPoints?: number;
-  loyaltyPoints?: number;
   role?: 'superadmin' | 'admin' | 'user';
   wishlist?: string[]; // Array of Product IDs
 }
@@ -55,11 +60,17 @@ export type RewardHistory = {
   type: 'earned' | 'redeemed';
 };
 
-export type CartItem = {
-  product: Product;
-  quantity: number;
+quantity: number;
 };
 
+
+export type OrderItem = {
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  image?: string;
+};
 
 export type Order = {
   id: string;
@@ -74,12 +85,7 @@ export type Order = {
     pincode: string;
     phone: string;
   };
-  orderItems: {
-    productId: string;
-    name: string;
-    price: number;
-    quantity: number;
-  }[];
+  orderItems: OrderItem[];
   paymentMethod?: 'COD' | 'RAZORPAY';
   paymentId?: string;
   discountApplied?: number;
@@ -106,4 +112,17 @@ export type Coupon = {
   expiryDate: Timestamp | FieldValue;
   isActive: boolean;
   description?: string;
+  usageLimit?: number;
+  usedCount?: number;
 };
+
+export type Review = {
+  id: string;
+  userId: string;
+  userName: string;
+  rating: number; // 1 to 5
+  comment: string;
+  date: Timestamp | FieldValue;
+  productId: string;
+};
+

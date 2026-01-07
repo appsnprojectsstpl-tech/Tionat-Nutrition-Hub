@@ -60,6 +60,17 @@ export function CouponInput() {
                 return;
             }
 
+            // 3. Validate Usage Limit
+            if (couponData.usageLimit && (couponData.usedCount || 0) >= couponData.usageLimit) {
+                toast({
+                    title: "Limit Reached",
+                    description: "This coupon has reached its maximum usage limit.",
+                    variant: "destructive"
+                });
+                setIsLoading(false);
+                return;
+            }
+
             // 3. Validate Min Order
             if (subtotal < couponData.minOrderValue) {
                 toast({

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { format } from 'date-fns';
-import { Loader2, Package, Truck, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Loader2, Package, Truck, CheckCircle, XCircle, AlertTriangle, Printer } from 'lucide-react';
 import type { Order } from '@/lib/types';
 import { useMemo, Suspense } from 'react';
 
@@ -136,7 +136,7 @@ function OrderDetailsContent() {
                                     </TableCell>
                                     <TableCell>₹{item.priceAtBooking || item.price}</TableCell>
                                     <TableCell>x{item.quantity}</TableCell>
-                                    <TableCell className="text-right">₹{((item.priceAtBooking || item.price) * item.quantity).toFixed(2)}</TableCell>
+                                    <TableCell className="text-right">₹{(((item.priceAtBooking || item.price || 0) * (item.quantity || 1)) || 0).toFixed(2)}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
@@ -171,6 +171,11 @@ function OrderDetailsContent() {
                         )}
                         <Button variant="destructive" onClick={() => handleStatusUpdate('Cancelled')}>
                             <XCircle className="mr-2 h-4 w-4" /> Cancel Order
+                        </Button>
+                        <Button variant="outline" asChild>
+                            <a href={`/admin/orders/invoice?id=${order.id}`} target="_blank" rel="noopener noreferrer">
+                                <Printer className="mr-2 h-4 w-4" /> Print Invoice
+                            </a>
                         </Button>
                     </div>
 
