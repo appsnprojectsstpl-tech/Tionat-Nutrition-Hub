@@ -60,9 +60,6 @@ export type RewardHistory = {
   type: 'earned' | 'redeemed';
 };
 
-quantity: number;
-};
-
 
 export type OrderItem = {
   productId: string;

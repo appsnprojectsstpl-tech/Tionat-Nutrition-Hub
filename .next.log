@@ -1,0 +1,20 @@
+
+> nextn@1.0.13 dev
+> next dev -p 9002
+
+   ▲ Next.js 15.3.8
+   - Local:        http://localhost:9002
+   - Network:      http://192.168.0.2:9002
+
+ ✓ Starting...
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+ ✓ Ready in 2s
+ ○ Compiling / ...
+ ✓ Compiled / in 14.6s (1483 modules)
+ ⚠ metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:9002". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase
+ GET / 200 in 16668ms
+ ✓ Compiled in 2.3s (598 modules)

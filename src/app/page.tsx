@@ -78,6 +78,7 @@ const POPULAR_SEARCHES = ["Protein", "Millet", "Cookies", "Oats", "Snacks", "Veg
 export default function Home() {
     const firestore = useFirestore();
     const [activeCategory, setActiveCategory] = useState('All');
+    const [queryLimit, setQueryLimit] = useState(20);
     const [isClient, setIsClient] = useState(false);
     const categoriesToShow = ['All', 'Ready to Cook', 'Breakfast', 'Lunch', 'Dinner'];
 
@@ -132,10 +133,10 @@ export default function Home() {
             }
         }
 
-        q = query(q, limit(20));
+        q = query(q, limit(queryLimit));
 
         return q;
-    }, [firestore, activeCategory]);
+    }, [firestore, activeCategory, queryLimit]);
 
     const featuredQuery = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -224,7 +225,10 @@ export default function Home() {
                         {categoriesToShow.map((name) => (
                             <button
                                 key={name}
-                                onClick={() => setActiveCategory(name)}
+                                onClick={() => {
+                                    setActiveCategory(name);
+                                    setQueryLimit(20);
+                                }}
                                 className="flex flex-col items-center gap-2 group"
                             >
                                 <div className={cn(
@@ -314,7 +318,7 @@ export default function Home() {
                         <Link href="/categories" className="text-xs font-normal text-primary ml-auto hover:underline">View All</Link>
                     </h2>
 
-                    {isLoadingProducts && (
+                    {isLoadingProducts && queryLimit === 20 && (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             {[1, 2, 3, 4].map(i => (
                                 <div key={i} className="aspect-[4/5] rounded-3xl bg-secondary/30 animate-pulse" />
@@ -322,14 +326,36 @@ export default function Home() {
                         </div>
                     )}
 
-                    {!isLoadingProducts && products && products.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
-                            {products.map((product) => (
-                                <ProductCard key={product.id} product={product} />
-                            ))}
-                        </div>
+                    {!(isLoadingProducts && queryLimit === 20) && products && products.length > 0 ? (
+                        <>
+                            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
+                                {products.map((product) => (
+                                    <ProductCard key={product.id} product={product} />
+                                ))}
+                            </div>
+
+                            {rawProducts && rawProducts.length >= queryLimit && (
+                                <div className="mt-8 flex justify-center">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setQueryLimit(prev => prev + 20)}
+                                        disabled={isLoadingProducts}
+                                        className="min-w-[150px]"
+                                    >
+                                        {isLoadingProducts ? (
+                                            <>
+                                                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                                Loading...
+                                            </>
+                                        ) : (
+                                            'Load More'
+                                        )}
+                                    </Button>
+                                </div>
+                            )}
+                        </>
                     ) : (
-                        (!isLoadingProducts) && (
+                        !(isLoadingProducts && queryLimit === 20) && (
                             <div className="text-center py-12">
                                 <p className="text-muted-foreground text-lg">No products found in this category.</p>
                             </div>
