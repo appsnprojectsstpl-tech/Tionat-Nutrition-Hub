@@ -278,20 +278,52 @@ export const verifyRazorpayPayment = functions.https.onCall(async (data: any, co
                 const invRef = db.collection("inventory").doc(item.productId);
                 const invSnap = await transaction.get(invRef);
 
+                let currentStock = 0;
+                let isNewInventory = false;
+
                 if (!invSnap.exists) {
-                    throw new Error(`Inventory missing for ${item.name}`);
+                    // Fallback: Check product doc if inventory migration not done
+                    const productRef = db.collection("products").doc(item.productId);
+                    const productSnap = await transaction.get(productRef);
+                    const productData = productSnap.data();
+
+                    if (productSnap.exists && productData && productData.stock !== undefined) {
+                        const legacyStock = Number(productData.stock);
+                        if (!isNaN(legacyStock)) {
+                            currentStock = legacyStock;
+                            isNewInventory = true;
+                            console.log(`[verifyRazorpayPayment] Auto-migrating inventory for ${item.productId} from product doc. Value: ${legacyStock}`);
+                        } else {
+                            throw new Error(`Inventory missing and legacy stock invalid for ${item.name}`);
+                        }
+                    } else {
+                        throw new Error(`Inventory missing for ${item.name}`);
+                    }
+                } else {
+                    currentStock = invSnap.data()?.stock || 0;
                 }
 
-                const currentStock = invSnap.data()?.stock || 0;
                 if (currentStock < item.quantity) {
                     throw new Error(`Insufficient stock for ${item.name}`);
                 }
 
-                inventoryUpdates.push({ ref: invRef, newStock: currentStock - item.quantity });
+                inventoryUpdates.push({
+                    ref: invRef,
+                    newStock: currentStock - item.quantity,
+                    isNew: isNewInventory,
+                    productId: item.productId
+                });
             }
 
             for (const update of inventoryUpdates) {
-                transaction.update(update.ref, { stock: update.newStock });
+                if (update.isNew) {
+                    transaction.set(update.ref, {
+                        productId: update.productId,
+                        stock: update.newStock
+                    });
+                } else {
+                    transaction.update(update.ref, { stock: update.newStock });
+                }
             }
 
             transaction.update(orderRef, {
