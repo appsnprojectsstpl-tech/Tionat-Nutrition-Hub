@@ -54,7 +54,12 @@ export const createOrderHTTP = functions.https.onRequest((req, res) => {
             console.log(`[createOrder] Starting for User: ${userId}, Method: ${paymentMethod}`);
 
             const productRefs = items.map((item: any) => db.collection('products').doc(item.productId));
-            const productSnaps = await db.getAll(...productRefs);
+            const inventoryRefs = items.map((item: any) => db.collection('inventory').doc(item.productId));
+
+            const [productSnaps, inventorySnaps] = await Promise.all([
+                db.getAll(...productRefs),
+                db.getAll(...inventoryRefs)
+            ]);
 
             let calculatedTotal = 0;
             const validatedItems = [];
@@ -62,6 +67,7 @@ export const createOrderHTTP = functions.https.onRequest((req, res) => {
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
                 const snap = productSnaps[i];
+                const invSnap = inventorySnaps[i];
 
                 if (!snap.exists) {
                     console.error(`[createOrder] Product not found: ${item.productId}`);
@@ -75,6 +81,24 @@ export const createOrderHTTP = functions.https.onRequest((req, res) => {
                 if (typeof price !== 'number') {
                     console.error(`[createOrder] Invalid price for product: ${item.productId}`);
                     res.status(500).json({ error: { code: 'data-loss', message: `Price error for product "${productData?.name}"` } });
+                    return;
+                }
+
+                // Stock Check
+                // Note: This is a read-only check to prevent creating orders for obviously out-of-stock items.
+                // Stock deduction (reservation) is handled in verifyRazorpayPayment or equivalent confirmation steps
+                // to avoid race conditions and double-deduction.
+                let availableStock = 0;
+                if (invSnap.exists) {
+                    availableStock = invSnap.data()?.stock || 0;
+                } else {
+                    // Fallback to product legacy stock if inventory doc missing
+                    availableStock = productData?.stock || 0;
+                }
+
+                if (availableStock < item.quantity) {
+                    console.warn(`[createOrder] Insufficient stock for product: ${item.productId}. Requested: ${item.quantity}, Available: ${availableStock}`);
+                    res.status(409).json({ error: { code: 'failed-precondition', message: `Insufficient stock for product "${productData?.name || item.name}". Available: ${availableStock}` } });
                     return;
                 }
 
