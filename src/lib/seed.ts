@@ -88,7 +88,7 @@ export async function seedDatabase(db: Firestore) {
       { productId: 'prod-1', name: 'Idli Mix', price: 120, quantity: 1 },
       { productId: 'prod-2', name: 'Vada Mix', price: 130, quantity: 1 }
     ],
-    paymentMethod: 'Cash on Delivery'
+    paymentMethod: 'COD'
   };
   const order2: Order = {
     id: 'order-2-seeded',
@@ -101,7 +101,7 @@ export async function seedDatabase(db: Firestore) {
       { productId: 'prod-3', name: 'Chole Mix', price: 150, quantity: 1 },
       { productId: 'prod-5', name: 'Sambar Mix', price: 140, quantity: 1 }
     ],
-    paymentMethod: 'Cash on Delivery'
+    paymentMethod: 'COD'
   };
 
   // Set order in both collections

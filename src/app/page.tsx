@@ -84,6 +84,11 @@ export default function Home() {
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const [recentSearches, setRecentSearches] = useState<string[]>([]);
+    const [limitCount, setLimitCount] = useState(20);
+
+    useEffect(() => {
+        setLimitCount(20);
+    }, [activeCategory]);
 
     useEffect(() => {
         setIsClient(true);
@@ -132,10 +137,10 @@ export default function Home() {
             }
         }
 
-        q = query(q, limit(20));
+        q = query(q, limit(limitCount));
 
         return q;
-    }, [firestore, activeCategory]);
+    }, [firestore, activeCategory, limitCount]);
 
     const featuredQuery = useMemoFirebase(() => {
         if (!firestore) return null;
@@ -323,11 +328,25 @@ export default function Home() {
                     )}
 
                     {!isLoadingProducts && products && products.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
-                            {products.map((product) => (
-                                <ProductCard key={product.id} product={product} />
-                            ))}
-                        </div>
+                        <>
+                            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
+                                {products.map((product) => (
+                                    <ProductCard key={product.id} product={product} />
+                                ))}
+                            </div>
+
+                            {products.length >= limitCount && (
+                                <div className="flex justify-center mt-8 mb-4">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setLimitCount(prev => prev + 20)}
+                                        className="min-w-[120px] rounded-full"
+                                    >
+                                        Load More
+                                    </Button>
+                                </div>
+                            )}
+                        </>
                     ) : (
                         (!isLoadingProducts) && (
                             <div className="text-center py-12">
