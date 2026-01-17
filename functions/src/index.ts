@@ -56,12 +56,17 @@ export const createOrderHTTP = functions.https.onRequest((req, res) => {
             const productRefs = items.map((item: any) => db.collection('products').doc(item.productId));
             const productSnaps = await db.getAll(...productRefs);
 
+            // Check Inventory
+            const inventoryRefs = items.map((item: any) => db.collection('inventory').doc(item.productId));
+            const inventorySnaps = await db.getAll(...inventoryRefs);
+
             let calculatedTotal = 0;
             const validatedItems = [];
 
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
                 const snap = productSnaps[i];
+                const invSnap = inventorySnaps[i];
 
                 if (!snap.exists) {
                     console.error(`[createOrder] Product not found: ${item.productId}`);
@@ -75,6 +80,19 @@ export const createOrderHTTP = functions.https.onRequest((req, res) => {
                 if (typeof price !== 'number') {
                     console.error(`[createOrder] Invalid price for product: ${item.productId}`);
                     res.status(500).json({ error: { code: 'data-loss', message: `Price error for product "${productData?.name}"` } });
+                    return;
+                }
+
+                // Inventory Validation
+                if (!invSnap.exists) {
+                    console.error(`[createOrder] Inventory missing for product: ${item.productId}`);
+                    res.status(500).json({ error: { code: 'internal', message: `Inventory missing for "${productData?.name || item.name}"` } });
+                    return;
+                }
+
+                const stock = invSnap.data()?.stock || 0;
+                if (stock < item.quantity) {
+                    res.status(409).json({ error: { code: 'resource-exhausted', message: `Insufficient stock for "${productData?.name || item.name}". Available: ${stock}` } });
                     return;
                 }
 
@@ -396,31 +414,67 @@ export const completeCODOrder = functions.https.onCall(async (data: any, context
             return { success: true, message: "Already paid" };
         }
 
-        const batch = db.batch();
+        await db.runTransaction(async (transaction) => {
+            // Re-read order inside transaction for concurrency safety
+            const freshOrderSnap = await transaction.get(orderRef);
+            if (!freshOrderSnap.exists) {
+                throw new functions.https.HttpsError("not-found", "Order not found");
+            }
 
-        batch.update(orderRef, {
-            status: "Paid",
-            "payment.status": "SUCCESS",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            timeline: admin.firestore.FieldValue.arrayUnion({
-                state: "Paid",
-                timestamp: new Date(),
-                actor: "admin",
-                metadata: { adminId: context.auth.uid, method: "COD" }
-            })
-        });
+            const currentOrderData = freshOrderSnap.data();
+            if (currentOrderData?.status === "Paid") {
+                return; // Already paid, idempotent
+            }
 
-        const userId = orderData?.userId;
-        if (userId) {
-            const userOrderRef = db.collection("users").doc(userId).collection("orders").doc(orderId);
-            batch.update(userOrderRef, {
+            const items = currentOrderData?.items || [];
+
+            // Check Inventory Availability First (All Reads)
+            const inventoryChecks = [];
+            for (const item of items) {
+                const invRef = db.collection("inventory").doc(item.productId);
+                const invSnap = await transaction.get(invRef);
+
+                if (!invSnap.exists) {
+                    throw new functions.https.HttpsError("internal", `Inventory missing for ${item.name}`);
+                }
+
+                const currentStock = invSnap.data()?.stock || 0;
+                if (currentStock < item.quantity) {
+                    throw new functions.https.HttpsError("failed-precondition", `Insufficient stock for ${item.name}`);
+                }
+
+                // Store for update phase
+                inventoryChecks.push({ ref: invRef, newStock: currentStock - item.quantity });
+            }
+
+            // Perform Inventory Updates (All Writes)
+            for (const check of inventoryChecks) {
+                transaction.update(check.ref, { stock: check.newStock });
+            }
+
+            // Update Order
+            transaction.update(orderRef, {
                 status: "Paid",
                 "payment.status": "SUCCESS",
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                timeline: admin.firestore.FieldValue.arrayUnion({
+                    state: "Paid",
+                    timestamp: new Date(),
+                    actor: "admin",
+                    metadata: { adminId: context.auth!.uid, method: "COD" }
+                })
             });
-        }
 
-        await batch.commit();
+            const userId = currentOrderData?.userId;
+            if (userId) {
+                const userOrderRef = db.collection("users").doc(userId).collection("orders").doc(orderId);
+                transaction.update(userOrderRef, {
+                    status: "Paid",
+                    "payment.status": "SUCCESS",
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+            }
+        });
 
         return { success: true };
     } catch (error: any) {

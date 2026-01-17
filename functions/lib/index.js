@@ -12,7 +12,7 @@ const corsHandler = cors({ origin: true });
 // HTTP function with CORS for createOrder
 exports.createOrderHTTP = functions.https.onRequest((req, res) => {
     return corsHandler(req, res, async () => {
-        var _a, _b, _c;
+        var _a, _b, _c, _d;
         try {
             // Only allow POST
             if (req.method !== 'POST') {
@@ -49,11 +49,15 @@ exports.createOrderHTTP = functions.https.onRequest((req, res) => {
             console.log(`[createOrder] Starting for User: ${userId}, Method: ${paymentMethod}`);
             const productRefs = items.map((item) => db.collection('products').doc(item.productId));
             const productSnaps = await db.getAll(...productRefs);
+            // Check Inventory
+            const inventoryRefs = items.map((item) => db.collection('inventory').doc(item.productId));
+            const inventorySnaps = await db.getAll(...inventoryRefs);
             let calculatedTotal = 0;
             const validatedItems = [];
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
                 const snap = productSnaps[i];
+                const invSnap = inventorySnaps[i];
                 if (!snap.exists) {
                     console.error(`[createOrder] Product not found: ${item.productId}`);
                     res.status(404).json({ error: { code: 'not-found', message: `Product "${item.name || item.productId}" not available` } });
@@ -66,6 +70,17 @@ exports.createOrderHTTP = functions.https.onRequest((req, res) => {
                     res.status(500).json({ error: { code: 'data-loss', message: `Price error for product "${productData === null || productData === void 0 ? void 0 : productData.name}"` } });
                     return;
                 }
+                // Inventory Validation
+                if (!invSnap.exists) {
+                    console.error(`[createOrder] Inventory missing for product: ${item.productId}`);
+                    res.status(500).json({ error: { code: 'internal', message: `Inventory missing for "${(productData === null || productData === void 0 ? void 0 : productData.name) || item.name}"` } });
+                    return;
+                }
+                const stock = ((_a = invSnap.data()) === null || _a === void 0 ? void 0 : _a.stock) || 0;
+                if (stock < item.quantity) {
+                    res.status(409).json({ error: { code: 'resource-exhausted', message: `Insufficient stock for "${(productData === null || productData === void 0 ? void 0 : productData.name) || item.name}". Available: ${stock}` } });
+                    return;
+                }
                 calculatedTotal += price * item.quantity;
                 validatedItems.push({
                     productId: item.productId,
@@ -73,21 +88,65 @@ exports.createOrderHTTP = functions.https.onRequest((req, res) => {
                     priceAtBooking: price,
                     quantity: item.quantity,
                     variantId: item.variantId || 'default',
-                    image: (productData === null || productData === void 0 ? void 0 : productData.image) || ((_a = productData === null || productData === void 0 ? void 0 : productData.images) === null || _a === void 0 ? void 0 : _a[0]) || null
+                    image: (productData === null || productData === void 0 ? void 0 : productData.image) || ((_b = productData === null || productData === void 0 ? void 0 : productData.images) === null || _b === void 0 ? void 0 : _b[0]) || null
                 });
             }
             const settingsSnap = await db.collection('settings').doc('financials').get();
             const settings = settingsSnap.data() || {};
             let taxAmount = 0;
             let deliveryFeeAmount = 0;
-            if ((_b = settings.deliveryFee) === null || _b === void 0 ? void 0 : _b.enabled) {
+            if ((_c = settings.deliveryFee) === null || _c === void 0 ? void 0 : _c.enabled) {
                 deliveryFeeAmount = Number(settings.deliveryFee.amount) || 0;
             }
-            if ((_c = settings.tax) === null || _c === void 0 ? void 0 : _c.enabled) {
+            if ((_d = settings.tax) === null || _d === void 0 ? void 0 : _d.enabled) {
                 const taxRate = Number(settings.tax.rate) || 0;
                 taxAmount = Math.round((calculatedTotal * taxRate) / 100);
             }
             const finalTotal = calculatedTotal + taxAmount + deliveryFeeAmount;
+            // --- Coupon Handling ---
+            const { couponCode } = req.body.data || req.body;
+            let discountAmount = 0;
+            let couponRef = null;
+            if (couponCode) {
+                console.log(`[createOrder] Validating coupon: ${couponCode}`);
+                const couponQuery = await db.collection('coupons').where('code', '==', couponCode).limit(1).get();
+                if (!couponQuery.empty) {
+                    const couponSnap = couponQuery.docs[0];
+                    const couponData = couponSnap.data();
+                    couponRef = couponSnap.ref;
+                    // Validate
+                    const now = admin.firestore.Timestamp.now();
+                    const expiry = couponData.expiryDate; // Timestamp
+                    let isValid = true;
+                    if (!couponData.isActive)
+                        isValid = false;
+                    if (expiry && expiry.toMillis() < now.toMillis())
+                        isValid = false;
+                    if (calculatedTotal < (couponData.minOrderValue || 0))
+                        isValid = false;
+                    if (couponData.usageLimit && (couponData.usedCount || 0) >= couponData.usageLimit)
+                        isValid = false;
+                    if (isValid) {
+                        if (couponData.discountType === 'PERCENTAGE') {
+                            let discount = (calculatedTotal * couponData.discountValue) / 100;
+                            if (couponData.maxDiscount)
+                                discount = Math.min(discount, couponData.maxDiscount);
+                            discountAmount = discount;
+                        }
+                        else {
+                            discountAmount = couponData.discountValue;
+                        }
+                        // Ensure discount doesn't exceed total
+                        if (discountAmount > calculatedTotal)
+                            discountAmount = calculatedTotal;
+                        console.log(`[createOrder] Coupon applied: ${couponCode}, Discount: ${discountAmount}`);
+                    }
+                    else {
+                        console.warn(`[createOrder] Coupon invalid or conditions not met: ${couponCode}`);
+                    }
+                }
+            }
+            const totalWithDiscount = Math.max(0, finalTotal - discountAmount);
             // Skip Razorpay for now - only COD
             let gatewayOrderId = null;
             const orderRef = db.collection('orders').doc();
@@ -101,7 +160,8 @@ exports.createOrderHTTP = functions.https.onRequest((req, res) => {
                     subtotal: calculatedTotal,
                     tax: taxAmount,
                     deliveryFee: deliveryFeeAmount,
-                    totalAmount: finalTotal,
+                    discountApplied: discountAmount,
+                    totalAmount: totalWithDiscount,
                     currency: "INR"
                 },
                 payment: {
@@ -110,6 +170,7 @@ exports.createOrderHTTP = functions.https.onRequest((req, res) => {
                     gatewayOrderId: gatewayOrderId,
                     signatureVerified: false
                 },
+                couponCode: couponCode || null,
                 logistics: {
                     addressSnapshot: shippingAddress
                 },
@@ -125,6 +186,10 @@ exports.createOrderHTTP = functions.https.onRequest((req, res) => {
             };
             const batch = db.batch();
             batch.set(orderRef, orderPayload);
+            // Increment Coupon Usage
+            if (couponRef) {
+                batch.update(couponRef, { usedCount: admin.firestore.FieldValue.increment(1) });
+            }
             const userOrderRef = db.collection('users').doc(userId).collection('orders').doc(orderId);
             batch.set(userOrderRef, orderPayload);
             await batch.commit();
@@ -133,7 +198,7 @@ exports.createOrderHTTP = functions.https.onRequest((req, res) => {
                 result: {
                     success: true,
                     orderId,
-                    totalAmount: finalTotal,
+                    totalAmount: totalWithDiscount,
                     gatewayOrderId,
                     currency: "INR"
                 }
@@ -262,28 +327,59 @@ exports.completeCODOrder = functions.https.onCall(async (data, context) => {
         if ((orderData === null || orderData === void 0 ? void 0 : orderData.status) === "Paid") {
             return { success: true, message: "Already paid" };
         }
-        const batch = db.batch();
-        batch.update(orderRef, {
-            status: "Paid",
-            "payment.status": "SUCCESS",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            timeline: admin.firestore.FieldValue.arrayUnion({
-                state: "Paid",
-                timestamp: new Date(),
-                actor: "admin",
-                metadata: { adminId: context.auth.uid, method: "COD" }
-            })
-        });
-        const userId = orderData === null || orderData === void 0 ? void 0 : orderData.userId;
-        if (userId) {
-            const userOrderRef = db.collection("users").doc(userId).collection("orders").doc(orderId);
-            batch.update(userOrderRef, {
+        await db.runTransaction(async (transaction) => {
+            var _a;
+            // Re-read order inside transaction for concurrency safety
+            const freshOrderSnap = await transaction.get(orderRef);
+            if (!freshOrderSnap.exists) {
+                throw new functions.https.HttpsError("not-found", "Order not found");
+            }
+            const currentOrderData = freshOrderSnap.data();
+            if ((currentOrderData === null || currentOrderData === void 0 ? void 0 : currentOrderData.status) === "Paid") {
+                return; // Already paid, idempotent
+            }
+            const items = (currentOrderData === null || currentOrderData === void 0 ? void 0 : currentOrderData.items) || [];
+            // Check Inventory Availability First (All Reads)
+            const inventoryChecks = [];
+            for (const item of items) {
+                const invRef = db.collection("inventory").doc(item.productId);
+                const invSnap = await transaction.get(invRef);
+                if (!invSnap.exists) {
+                    throw new functions.https.HttpsError("internal", `Inventory missing for ${item.name}`);
+                }
+                const currentStock = ((_a = invSnap.data()) === null || _a === void 0 ? void 0 : _a.stock) || 0;
+                if (currentStock < item.quantity) {
+                    throw new functions.https.HttpsError("failed-precondition", `Insufficient stock for ${item.name}`);
+                }
+                // Store for update phase
+                inventoryChecks.push({ ref: invRef, newStock: currentStock - item.quantity });
+            }
+            // Perform Inventory Updates (All Writes)
+            for (const check of inventoryChecks) {
+                transaction.update(check.ref, { stock: check.newStock });
+            }
+            // Update Order
+            transaction.update(orderRef, {
                 status: "Paid",
                 "payment.status": "SUCCESS",
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                timeline: admin.firestore.FieldValue.arrayUnion({
+                    state: "Paid",
+                    timestamp: new Date(),
+                    actor: "admin",
+                    metadata: { adminId: context.auth.uid, method: "COD" }
+                })
             });
-        }
-        await batch.commit();
+            const userId = currentOrderData === null || currentOrderData === void 0 ? void 0 : currentOrderData.userId;
+            if (userId) {
+                const userOrderRef = db.collection("users").doc(userId).collection("orders").doc(orderId);
+                transaction.update(userOrderRef, {
+                    status: "Paid",
+                    "payment.status": "SUCCESS",
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+            }
+        });
         return { success: true };
     }
     catch (error) {
