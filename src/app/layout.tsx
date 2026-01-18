@@ -84,7 +84,25 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`tionat ${outfit.variable}`}>
       <head>
-        {/* Optimized for Production */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+               window.onerror = function(msg, url, line, col, error) {
+                 var div = document.createElement('div');
+                 div.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:black;color:red;z-index:99999;font-size:14px;padding:20px;overflow:auto;font-family:monospace;white-space:pre-wrap;';
+                 div.innerHTML = '<h1>FATAL BOOT ERROR</h1><h3>' + msg + '</h3><p>' + url + ':' + line + ':' + col + '</p><hr/><p>' + (error && error.stack ? error.stack : 'No stack') + '</p><button onclick="window.location.reload()" style="background:white;color:black;padding:10px;margin-top:20px;">RELOAD</button>';
+                 document.body.appendChild(div);
+                 return false; 
+               };
+               window.onunhandledrejection = function(event) {
+                 var div = document.createElement('div');
+                 div.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#2d0000;color:#ff5555;z-index:99999;font-size:14px;padding:20px;overflow:auto;font-family:monospace;white-space:pre-wrap;';
+                 div.innerHTML = '<h1>UNHANDLED PROMISE ERROR</h1><h3>' + event.reason + '</h3><hr/><button onclick="window.location.reload()" style="background:white;color:black;padding:10px;margin-top:20px;">RELOAD</button>';
+                 document.body.appendChild(div);
+               };
+             `
+          }}
+        />
       </head>
       <body className="font-body antialiased bg-background">
         <ThemeProvider
