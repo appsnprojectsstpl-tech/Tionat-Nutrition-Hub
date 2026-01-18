@@ -13,6 +13,7 @@ import { Loader2, Save, ArrowLeft, Percent, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function BulkEditPage() {
     const firestore = useFirestore();
@@ -22,8 +23,6 @@ export default function BulkEditPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-
-    import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
     // Track edits: Map<ProductId, Partial<Product>>
     const [edits, setEdits] = useState<{ [key: string]: Partial<Product> }>({});

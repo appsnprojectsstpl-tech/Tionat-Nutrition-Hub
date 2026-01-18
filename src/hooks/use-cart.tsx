@@ -59,6 +59,37 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) { }
   }, [items]);
 
+  const itemCount = items.reduce((total, item) => total + item.quantity, 0);
+
+  const subtotal = items.reduce(
+    (total, item) => total + item.product.price * item.quantity,
+    0
+  );
+
+  // Calculate Discount
+  let discountAmount = 0;
+  if (coupon) {
+    if (subtotal < coupon.minOrderValue) {
+      discountAmount = 0;
+    } else {
+      if (coupon.type === 'percentage') {
+        let eligibleAmount = subtotal;
+        if (coupon.applicableCategoryId && coupon.applicableCategoryId !== 'all') {
+          eligibleAmount = items
+            .filter(item => item.product.category === coupon.applicableCategoryId)
+            .reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+        }
+        const calculated = (eligibleAmount * coupon.value) / 100;
+        discountAmount = coupon.maxDiscount ? Math.min(calculated, coupon.maxDiscount) : calculated;
+      } else {
+        discountAmount = coupon.value;
+      }
+    }
+  }
+
+  // Ensure total isn't negative
+  const total = Math.max(0, subtotal - discountAmount);
+
 
 
   // Persist cart to Firestore for logged-in users
@@ -170,42 +201,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  const itemCount = items.reduce((total, item) => total + item.quantity, 0);
 
-  const subtotal = items.reduce(
-    (total, item) => total + item.product.price * item.quantity,
-    0
-  );
-
-  // Calculate Discount
-  let discountAmount = 0;
-  if (coupon) {
-    if (subtotal < coupon.minOrderValue) {
-      // If subtotal drops below min, auto-remove or just 0 discount?
-      // Let's just 0 it but keep coupon in state (user might add more items)
-      discountAmount = 0;
-    } else {
-      if (coupon.type === 'percentage') {
-        let eligibleAmount = subtotal;
-
-        // Category Constraint Logic
-        if (coupon.applicableCategoryId && coupon.applicableCategoryId !== 'all') {
-          // Calculate total only for items in this category
-          eligibleAmount = items
-            .filter(item => item.product.category === coupon.applicableCategoryId)
-            .reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-        }
-
-        const calculated = (eligibleAmount * coupon.value) / 100;
-        discountAmount = coupon.maxDiscount ? Math.min(calculated, coupon.maxDiscount) : calculated;
-      } else {
-        discountAmount = coupon.value;
-      }
-    }
-  }
-
-  // Ensure total isn't negative
-  const total = Math.max(0, subtotal - discountAmount);
 
   return (
     <CartContext.Provider

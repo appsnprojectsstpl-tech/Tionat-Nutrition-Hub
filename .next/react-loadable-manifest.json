@@ -1,32 +1,98 @@
 {
   "..\\node_modules\\@capacitor\\app\\dist\\esm\\index.js -> ./web": {
-    "id": "..\\node_modules\\@capacitor\\app\\dist\\esm\\index.js -> ./web",
+    "id": 13441,
     "files": [
-      "static/chunks/_app-pages-browser_node_modules_capacitor_app_dist_esm_web_js.js"
+      "static/chunks/3441.dbd0679cb3a57ee0.js"
     ]
   },
-  "..\\node_modules\\next\\dist\\client\\components\\react-dev-overlay\\utils\\use-websocket.js -> @vercel/turbopack-ecmascript-runtime/browser/dev/hmr-client/hmr-client.ts": {
-    "id": "..\\node_modules\\next\\dist\\client\\components\\react-dev-overlay\\utils\\use-websocket.js -> @vercel/turbopack-ecmascript-runtime/browser/dev/hmr-client/hmr-client.ts",
+  "..\\node_modules\\jspdf\\dist\\jspdf.es.min.js -> canvg": {
+    "id": 34137,
     "files": [
-      "static/chunks/_app-pages-browser_node_modules_next_dist_client_dev_noop-turbopack-hmr_js.js"
+      "static/chunks/bc98253f.a20b3a3cf1b114d6.js",
+      "static/chunks/2121.83655fd77e51cc3e.js"
+    ]
+  },
+  "..\\node_modules\\jspdf\\dist\\jspdf.es.min.js -> dompurify": {
+    "id": 10822,
+    "files": [
+      "static/chunks/822.4eaac3e6ad02dd8d.js"
+    ]
+  },
+  "..\\node_modules\\jspdf\\dist\\jspdf.es.min.js -> html2canvas": {
+    "id": 52699,
+    "files": [
+      "static/chunks/ad2866b8.1fc071285e350c45.js"
     ]
   },
   "..\\node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
-    "id": "..\\node_modules\\next\\dist\\client\\index.js -> ../pages/_app",
+    "id": 90472,
     "files": [
-      "static/chunks/_pages-dir-browser_node_modules_next_dist_pages__app_js.js"
+      "static/chunks/472.2c08b965bd9148e2.js"
     ]
   },
   "..\\node_modules\\next\\dist\\client\\index.js -> ../pages/_error": {
-    "id": "..\\node_modules\\next\\dist\\client\\index.js -> ../pages/_error",
+    "id": 99341,
     "files": [
-      "static/chunks/_pages-dir-browser_node_modules_next_dist_pages__error_js.js"
+      "static/chunks/9341.a5e04b1003bfe050.js"
+    ]
+  },
+  "app\\admin\\order-details\\page.tsx -> firebase/firestore": {
+    "id": 35317,
+    "files": []
+  },
+  "app\\admin\\orders\\label\\page.tsx -> firebase/firestore": {
+    "id": 35317,
+    "files": []
+  },
+  "app\\admin\\orders\\page.tsx -> @/lib/ledger": {
+    "id": 27648,
+    "files": [
+      "static/chunks/7648.99c669a6da0bd91b.js"
+    ]
+  },
+  "app\\admin\\product-editor\\page.tsx -> firebase/firestore": {
+    "id": 35317,
+    "files": []
+  },
+  "app\\checkout\\page.tsx -> @/lib/ledger": {
+    "id": 27648,
+    "files": [
+      "static/chunks/7648.99c669a6da0bd91b.js"
+    ]
+  },
+  "app\\profile\\page.tsx -> @/components/profile-content": {
+    "id": 17564,
+    "files": [
+      "static/chunks/bc9e92e6-1d3ab6efbacbb591.js",
+      "static/chunks/ceb9e9aa-88c9b836d0fde7b9.js",
+      "static/chunks/164f4fb6-78977a07954931a9.js",
+      "static/chunks/2f0b94e8-c7cbb08fcaccaeb5.js",
+      "static/chunks/5495-5deb745bad2b12ff.js",
+      "static/chunks/3911-2897c19860992ac5.js",
+      "static/chunks/6874-ff27d1dfa12e6d5f.js",
+      "static/chunks/6997-09d2738cba392be9.js",
+      "static/chunks/7849-05f5503cdfb7c856.js",
+      "static/chunks/6602-3d35499cad6b2ef8.js",
+      "static/chunks/5152-d76041a807e71248.js",
+      "static/chunks/5821-ce8e6741364ead2b.js",
+      "static/chunks/2925-b585635391847126.js",
+      "static/chunks/4754-80183a281f8bc214.js",
+      "static/chunks/492-f37cdd093e4a7e3e.js",
+      "static/chunks/7414-71a0ee1e9ef86750.js",
+      "static/chunks/3411.08241f3626d1d7b6.js",
+      "static/chunks/9303-26d835f015ffd6f6.js",
+      "static/chunks/6215-042b49ead13cd785.js",
+      "static/chunks/7564.16a8ac6508465635.js"
     ]
   },
   "components\\app-shell.tsx -> @capacitor/app": {
-    "id": "components\\app-shell.tsx -> @capacitor/app",
+    "id": 28931,
     "files": [
-      "static/chunks/_app-pages-browser_node_modules_capacitor_app_dist_esm_index_js.js"
+      "static/chunks/8931.91df2351f35ce17a.js"
     ]
+  },
+  "components\\profile\\settings-tab.tsx -> firebase/auth": {
+    "id": 93004,
+    "files": []
   }
 }

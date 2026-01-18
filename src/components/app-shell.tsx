@@ -10,8 +10,7 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useFCM } from '@/hooks/use-fcm';
 import { FlashSaleBanner } from './flash-sale-banner';
-
-
+import { SupportWidget } from './support-widget';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -75,6 +74,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="md:hidden">
                 <BottomNav />
             </div>
+
+            <SupportWidget />
         </>
     );
 }

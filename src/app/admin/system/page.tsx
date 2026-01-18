@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle, Activity, Lock, FileText, ShieldAlert } from "lucide-react";
 import { useFirestore, useUser } from "@/firebase";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { updateDocumentNonBlocking, setDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
@@ -23,8 +23,6 @@ export default function SystemHealthPage() {
 
     // Listen to System Settings
     const settingsRef = doc(firestore, 'system', 'settings');
-    import { onSnapshot } from "firebase/firestore";
-    import { useEffect } from "react";
 
     useEffect(() => {
         if (!firestore) return;
@@ -52,12 +50,16 @@ export default function SystemHealthPage() {
 
     const toggleEmergencyMode = async () => {
         const newState = !settings?.emergencyReadOnly;
-        await updateDocumentNonBlocking(settingsRef, { emergencyReadOnly: newState }, { merge: true });
-        toast({
-            title: newState ? "EMERGENCY MODE ACTIVATED" : "System Normal",
-            description: newState ? "All writes are now blocked globally." : "Write access restored.",
-            variant: newState ? "destructive" : "default"
-        });
+        try {
+            await updateDocumentNonBlocking(settingsRef, { emergencyReadOnly: newState }, { merge: true });
+            toast({
+                title: newState ? "EMERGENCY MODE ACTIVATED" : "System Normal",
+                description: newState ? "All writes are now blocked globally." : "Write access restored.",
+                variant: newState ? "destructive" : "default"
+            });
+        } catch (e) {
+            await setDocumentNonBlocking(settingsRef, { emergencyReadOnly: newState }, { merge: true });
+        }
     }
 
     if (userProfile?.role !== 'superadmin') {
@@ -70,16 +72,8 @@ export default function SystemHealthPage() {
         );
     }
 
-    const toggleEmergencyMode = async () => {
-        // TODO: Implement actual write to config/system
-        const newState = !isEmergencyReadOnly;
-        setIsEmergencyReadOnly(newState);
-        toast({
-            title: newState ? "EMERGENCY MODE ACTIVATED" : "System Normal",
-            description: newState ? "All writes are now blocked globally." : "Write access restored.",
-            variant: newState ? "destructive" : "default"
-        });
-    };
+    // Derived state for UI clarity
+    const isEmergencyReadOnly = settings?.emergencyReadOnly || false;
 
     return (
         <div className="flex flex-col gap-6 space-y-4">
@@ -162,23 +156,7 @@ export default function SystemHealthPage() {
                                     <Label>Default Commission Rate (%)</Label>
                                     <input className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" defaultValue="10" />
                                 </div>
-                                <div className="grid gap-2">
-                                    <Label>Admin Session PIN</Label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                                            placeholder="Set 6-digit PIN"
-                                            defaultValue={settings?.adminPin}
-                                            onChange={(e) => setSettings({ ...settings, adminPin: e.target.value })}
-                                        />
-                                        <Button onClick={async () => {
-                                            if (settings?.adminPin) {
-                                                await updateDocumentNonBlocking(settingsRef, { adminPin: settings.adminPin }, { merge: true });
-                                                toast({ title: "PIN Updated", description: "New Admin PIN saved." });
-                                            }
-                                        }}>Save</Button>
-                                    </div>
-                                </div>
+
                             </div>
                         </CardContent>
                     </Card>

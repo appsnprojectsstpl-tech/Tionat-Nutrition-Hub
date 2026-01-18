@@ -1,6 +1,5 @@
 'use client';
 
-
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import type { Order } from '@/lib/types';
@@ -17,8 +16,8 @@ import { Separator } from '@/components/ui/separator';
 import { doc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, XCircle } from 'lucide-react';
-import React, { Suspense, useState } from 'react';
+import { ArrowLeft, Loader2, XCircle, Download, Star } from 'lucide-react';
+import React, { Suspense, useState, useEffect } from 'react';
 import { TrackingTimeline } from '@/components/tracking-timeline';
 import { useToast } from '@/hooks/use-toast';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
@@ -41,6 +40,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { RefundTracker } from "@/components/order/refund-tracker";
+import { generateInvoice } from "@/lib/invoice-generator";
+import { useCart } from "@/hooks/use-cart";
 
 // Helper Component for Returns
 function ReturnDialog({ order, orderRef, rootOrderRef }: { order: Order, orderRef: any, rootOrderRef: any }) {
@@ -125,6 +126,7 @@ function OrderDetailsContent() {
     const { user, isUserLoading } = useAuth();
     const firestore = useFirestore();
     const { toast } = useToast();
+    const { addToCart } = useCart();
     const [isCancelling, setIsCancelling] = useState(false);
 
     const orderRef = useMemoFirebase(
@@ -139,7 +141,6 @@ function OrderDetailsContent() {
 
     const { data: order, isLoading } = useDoc<Order>(orderRef);
 
-    // Helper function moved up
     const getCancelTimeLeft = (orderDate: any) => {
         if (!orderDate?.toDate) return 0;
         const now = new Date().getTime();
@@ -151,11 +152,9 @@ function OrderDetailsContent() {
 
     const [timeLeftMs, setTimeLeftMs] = useState<number>(0);
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (order?.status === 'Pending' && order?.orderDate) {
-            // Initial check
             setTimeLeftMs(getCancelTimeLeft(order.orderDate));
-
             const interval = setInterval(() => {
                 const left = getCancelTimeLeft(order.orderDate);
                 setTimeLeftMs(left);
@@ -164,9 +163,7 @@ function OrderDetailsContent() {
         }
     }, [order]);
 
-    // Initial loading or auth loading
     if (!orderId) {
-        // Handle missing ID gracefully
         return (
             <div className="min-h-screen bg-background">
                 <main className="container mx-auto px-4 py-8 text-center pt-20">
@@ -188,7 +185,6 @@ function OrderDetailsContent() {
     }
 
     if (!user) {
-        // Should ideally redirect, but safe fallback
         router.push('/login?redirect=/profile');
         return null;
     }
@@ -210,13 +206,8 @@ function OrderDetailsContent() {
 
         setIsCancelling(true);
         try {
-            if (orderRef) {
-                await updateDocumentNonBlocking(orderRef, { status: 'Cancelled' });
-            }
-            if (rootOrderRef) {
-                // Best effort to update root order
-                await updateDocumentNonBlocking(rootOrderRef, { status: 'Cancelled' });
-            }
+            if (orderRef) await updateDocumentNonBlocking(orderRef, { status: 'Cancelled' });
+            if (rootOrderRef) await updateDocumentNonBlocking(rootOrderRef, { status: 'Cancelled' });
 
             toast({
                 title: "Order Cancelled",
@@ -234,8 +225,6 @@ function OrderDetailsContent() {
         }
     };
 
-
-
     return (
         <div className="min-h-screen bg-background">
             <main className="container mx-auto px-4 py-8">
@@ -251,10 +240,20 @@ function OrderDetailsContent() {
                                 Need Help?
                             </Button>
                             {order.invoiceNumber && (
-                                <Button variant="outline" onClick={() => window.open(`/invoice/${order.id}`, '_blank')}>
-                                    <Download className="mr-2 h-4 w-4" />
-                                    Invoice
-                                </Button>
+                                <>
+                                    <Button variant="outline" onClick={() => {
+                                        if (order.orderItems) {
+                                            order.orderItems.forEach(item => addToCart({ id: item.productId, ...item } as any, item.quantity));
+                                            router.push('/cart');
+                                        }
+                                    }}>
+                                        Buy Again
+                                    </Button>
+                                    <Button variant="outline" onClick={() => generateInvoice(order)}>
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Invoice
+                                    </Button>
+                                </>
                             )}
                         </div>
                     </div>
@@ -307,14 +306,19 @@ function OrderDetailsContent() {
                             <CardContent>
                                 <ul className="space-y-4">
                                     {(order.orderItems && Array.isArray(order.orderItems)) ? order.orderItems.map((item) => (
-                                        <li key={item.productId} className="flex justify-between items-center text-sm">
-                                            <div>
+                                        <li key={item.productId} className="flex justify-between items-start text-sm py-2">
+                                            <div className="flex-1">
                                                 <p className="font-semibold">{item.name}</p>
-                                                <p className="text-muted-foreground">
+                                                <p className="text-muted-foreground text-xs">
                                                     {item.quantity} x {item.price.toFixed(2)}
                                                 </p>
+                                                {order.status === 'Delivered' && (
+                                                    <Button variant="link" className="h-auto p-0 text-xs text-blue-600 mt-1" onClick={() => toast({ title: "Rate Product", description: "Review feature coming soon!" })}>
+                                                        <Star className="w-3 h-3 mr-1" /> Write Review
+                                                    </Button>
+                                                )}
                                             </div>
-                                            <p>{(item.quantity * item.price).toFixed(2)}</p>
+                                            <p className="font-medium">{(item.quantity * item.price).toFixed(2)}</p>
                                         </li>
                                     )) : (
                                         <li className="text-sm text-muted-foreground">No items in this order.</li>
@@ -336,7 +340,7 @@ function OrderDetailsContent() {
                                         <span>{(order.totalAmount || 0).toFixed(2)}</span>
                                     </div>
                                     <div className="text-xs text-muted-foreground text-right mt-1">
-                                        (Includes GST of ₹{((order.totalAmount || 0) - ((order.totalAmount || 0) / 1.18)).toFixed(2)})
+                                        (Includes GST)
                                     </div>
                                 </div>
                             </CardContent>

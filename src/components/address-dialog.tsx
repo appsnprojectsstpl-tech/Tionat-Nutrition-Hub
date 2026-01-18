@@ -13,8 +13,6 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import { Geolocation } from '@capacitor/geolocation';
-import { Capacitor } from '@capacitor/core';
 import {
     Form,
     FormControl,
@@ -23,17 +21,24 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { useAuth, useDoc, useFirestore, useMemoFirebase } from "@/firebase";
-import { doc, arrayUnion, arrayRemove } from "firebase/firestore";
-import type { UserProfile } from "@/lib/types";
-import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { useAuth, useFirestore, useMemoFirebase } from "@/firebase";
+import { doc } from "firebase/firestore";
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useState } from 'react';
 import { useAddress } from '@/providers/address-provider';
 
+// Enhanced Schema with Label
 const addressSchema = z.object({
     address: z.string().min(10, 'Please enter a full, valid address.'),
+    label: z.enum(['Home', 'Work', 'Other']).default('Home'),
 });
 
 type AddressFormData = z.infer<typeof addressSchema>;
@@ -46,33 +51,47 @@ interface AddressDialogProps {
 
 export function AddressDialog({ children, address, onSave }: AddressDialogProps) {
     const { user } = useAuth();
-    const firestore = useFirestore();
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
+    const { setAddress } = useAddress();
 
-    const userProfileRef = useMemoFirebase(
-        () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
-        [firestore, user]
-    );
+    // Parse existing address to extract label if possible
+    // Format: "[Label] Address"
+    const getInitialValues = () => {
+        let initialLabel: 'Home' | 'Work' | 'Other' = 'Home';
+        let initialAddr = address || '';
+
+        if (address && address.startsWith('[')) {
+            const endBracket = address.indexOf(']');
+            if (endBracket > -1) {
+                const labelStr = address.substring(1, endBracket);
+                if (['Home', 'Work', 'Other'].includes(labelStr)) {
+                    initialLabel = labelStr as any;
+                    initialAddr = address.substring(endBracket + 1).trim();
+                }
+            }
+        }
+        return { label: initialLabel, address: initialAddr };
+    };
 
     const form = useForm<AddressFormData>({
         resolver: zodResolver(addressSchema),
-        defaultValues: {
-            address: address || '',
-        }
+        defaultValues: getInitialValues(),
     });
-
-    const { setAddress } = useAddress();
 
     useEffect(() => {
         if (isOpen) {
-            form.reset({ address: address || '' });
+            form.reset(getInitialValues());
         }
     }, [isOpen, address, form]);
 
     const onSubmit: SubmitHandler<AddressFormData> = async (data) => {
+        const fullAddress = data.label === 'Other' ? data.address : `[${data.label}] ${data.address}`;
         try {
-            await setAddress(data.address);
+            await setAddress(fullAddress);
+            toast({ title: "Address Saved", description: "Your address has been saved." });
+            setIsOpen(false);
+            if (onSave) onSave();
         } catch (error) {
             console.error("Error updating address:", error);
             toast({
@@ -80,17 +99,6 @@ export function AddressDialog({ children, address, onSave }: AddressDialogProps)
                 description: "Failed to save address.",
                 variant: "destructive"
             });
-            return;
-        }
-
-        toast({
-            title: address ? "Address Updated" : "Address Added",
-            description: "Your delivery address has been saved.",
-        });
-
-        setIsOpen(false);
-        if (onSave) {
-            onSave();
         }
     };
 
@@ -107,12 +115,33 @@ export function AddressDialog({ children, address, onSave }: AddressDialogProps)
                 <DialogHeader>
                     <DialogTitle>{address ? 'Edit Address' : 'Add New Address'}</DialogTitle>
                     <DialogDescription>
-                        Enter your full address including city and pincode.
+                        Enter your delivery details.
                     </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        {/* GPS button removed - using saved addresses only */}
+                        <FormField
+                            control={form.control}
+                            name="label"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Address Type</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select type" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="Home">Home</SelectItem>
+                                            <SelectItem value="Work">Work</SelectItem>
+                                            <SelectItem value="Other">Other</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
 
                         <FormField
                             control={form.control}
@@ -121,7 +150,7 @@ export function AddressDialog({ children, address, onSave }: AddressDialogProps)
                                 <FormItem>
                                     <FormLabel>Full Address</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="e.g. 123 Main St, Anytown, 123456" {...field} />
+                                        <Input placeholder="e.g. 123 Main St, Bangalore" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

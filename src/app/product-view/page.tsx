@@ -39,28 +39,10 @@ async function getProduct(id: string) {
     }
 }
 
-export async function generateMetadata(
-    { searchParams }: Props,
-): Promise<Metadata> {
-    const id = searchParams.id as string;
-    const product = await getProduct(id);
-
-    if (!product) {
-        return {
-            title: 'Product Details | Tionat',
-        }
-    }
-
-    return {
-        title: product.metaTitle || `${product.name} | Tionat`,
-        description: product.metaDescription || product.description?.slice(0, 160),
-        openGraph: {
-            title: product.metaTitle || product.name,
-            description: product.metaDescription || product.description?.slice(0, 160),
-            images: product.imageUrl ? [product.imageUrl] : [],
-        },
-    }
-}
+export const metadata: Metadata = {
+    title: 'Product Details | Tionat',
+    description: 'View product details and add to cart.',
+};
 
 export default function ProductViewPage({ searchParams }: Props) {
     // Pass searchParams to Client Component or just the ID
