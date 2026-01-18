@@ -26,7 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
-import { collection, query, orderBy, writeBatch, doc, where, limit } from "firebase/firestore";
+import { collection, query, orderBy, writeBatch, doc, where, limit, serverTimestamp, increment } from "firebase/firestore";
 import { Order } from "@/lib/types";
 import { format } from 'date-fns';
 import { MoreHorizontal, Plus } from "lucide-react";
@@ -107,6 +107,16 @@ export default function AdminOrdersPage() {
     // Reference to the order in the user-specific /users/{userId}/orders collection
     const userOrderRef = doc(firestore, `users/${order.userId}/orders`, order.id);
     batch.update(userOrderRef, { status: newStatus });
+
+    // Update User Stats (MVP: Only increment on Delivery)
+    if (newStatus === 'Delivered' && order.status !== 'Delivered') {
+      const userProfileRef = doc(firestore, 'users', order.userId);
+      batch.set(userProfileRef, {
+        totalSpend: increment(order.totalAmount || 0),
+        orderCount: increment(1),
+        lastOrderDate: serverTimestamp()
+      }, { merge: true });
+    }
 
     try {
       await batch.commit();

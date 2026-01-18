@@ -285,7 +285,12 @@ function OrderDetailsContent() {
                         </Button>
                         <Button variant="outline" asChild>
                             <a href={`/admin/orders/invoice?id=${order.id}`} target="_blank" rel="noopener noreferrer">
-                                <Printer className="mr-2 h-4 w-4" /> Print Invoice
+                                <Printer className="mr-2 h-4 w-4" /> Invoice
+                            </a>
+                        </Button>
+                        <Button variant="outline" asChild>
+                            <a href={`/admin/orders/label?id=${order.id}`} target="_blank" rel="noopener noreferrer">
+                                <Package className="mr-2 h-4 w-4" /> Label
                             </a>
                         </Button>
                     </div>

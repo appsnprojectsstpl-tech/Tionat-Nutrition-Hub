@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useCart } from '@/hooks/use-cart';
 import { useToast } from '@/hooks/use-toast';
 import { RelatedProducts } from '@/components/related-products';
+import { ProductReviews } from '@/components/product-reviews';
 import { useWarehouse } from '@/context/warehouse-context';
 import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -231,8 +232,19 @@ export function ProductClient({ initialProduct }: ProductClientProps) {
                 </div>
             </div>
 
+
+            <div className="mt-12">
+                <ProductReviews productId={product.id} />
+            </div>
+
             {product && (
-                <RelatedProducts categoryId={product.categoryId} currentProductId={product.id} />
+                <RelatedProducts
+                    categoryId={product.categoryId}
+                    currentProductId={product.id}
+                    subcategoryId={product.subcategoryId}
+                    currentPrice={product.price}
+                    currentName={product.name}
+                />
             )}
         </div>
     );

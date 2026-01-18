@@ -32,6 +32,9 @@ export type Product = {
   reviewCount?: number;
   weight?: string; // e.g., "500"
   unit?: string; // e.g., "g", "kg", "ml"
+  metaTitle?: string;
+  metaDescription?: string;
+  metaKeywords?: string;
 };
 
 export type Inventory = {
@@ -90,6 +93,11 @@ export type UserProfile = {
   wishlist?: string[]; // Array of Product IDs
   referralCode?: string;
   referredBy?: string;
+  totalSpend?: number;
+  orderCount?: number;
+  lastOrderDate?: Timestamp | FieldValue | string;
+  isDeleted?: boolean;
+  deletedAt?: Timestamp | FieldValue | string;
 }
 
 export type RewardHistory = {
@@ -132,6 +140,10 @@ export type Order = {
   warehouseId?: string; // New field for Franchise Model
   invoiceNumber?: string; // Unique Invoice ID (e.g. BLR-2024-001)
   finalAmount?: number;
+  returnStatus?: 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
+  returnReason?: string;
+  returnDate?: Timestamp | FieldValue;
+  returnProcessedAt?: Timestamp | FieldValue;
 };
 
 export type LoyaltyProgram = {
@@ -155,6 +167,7 @@ export type Coupon = {
   description?: string;
   usageLimit?: number;
   usedCount?: number;
+  applicableCategoryId?: string;
 };
 
 export type Review = {
@@ -165,6 +178,7 @@ export type Review = {
   comment: string;
   date: Timestamp | FieldValue;
   productId: string;
+  media?: string[]; // URLs for images/videos
 };
 
 export type StockAdjustmentReason = 'RESTOCK' | 'CORRECTION' | 'DAMAGE' | 'SHRINKAGE' | 'OTHER';

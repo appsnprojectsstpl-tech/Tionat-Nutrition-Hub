@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useFirestore, useCollection, useUser } from '@/firebase';
+import { useFirestore, useCollection, useUser, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, deleteDoc, doc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Coupon } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -41,8 +41,12 @@ export default function AdminCouponsPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const couponsQuery = query(collection(firestore!, 'coupons'), orderBy('expiryDate', 'desc')); // Assuming firestore exists
-    const { data: coupons, isLoading } = useCollection<Coupon>(firestore ? couponsQuery : null);
+    const couponsQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'coupons'), orderBy('expiryDate', 'desc'));
+    }, [firestore]);
+
+    const { data: coupons, isLoading } = useCollection<Coupon>(couponsQuery);
 
     const form = useForm<CouponFormData>({
         resolver: zodResolver(couponSchema),

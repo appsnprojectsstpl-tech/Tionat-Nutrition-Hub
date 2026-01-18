@@ -19,7 +19,17 @@ const config: CapacitorConfig = {
             launchShowDuration: 2000,
             backgroundColor: "#ffffff",
             showSpinner: false
-        }
+        },
+        StatusBar: {
+            style: "DARK",
+            backgroundColor: "#4c1d95", // Matches brand
+            overlay: false,
+        },
+        Keyboard: {
+            resize: "body",
+            style: "DARK",
+            resizeOnFullScreen: true,
+        },
     }
 };
 

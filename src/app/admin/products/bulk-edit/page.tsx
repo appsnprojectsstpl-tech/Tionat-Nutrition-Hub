@@ -23,8 +23,12 @@ export default function BulkEditPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
 
+    import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
     // Track edits: Map<ProductId, Partial<Product>>
     const [edits, setEdits] = useState<{ [key: string]: Partial<Product> }>({});
+    const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
+    const [bulkPercent, setBulkPercent] = useState<string>("");
 
     useEffect(() => {
         fetchProducts();
@@ -123,19 +127,56 @@ export default function BulkEditPage() {
             </div>
 
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
                     <div>
                         <CardTitle>Product Grid</CardTitle>
                         <CardDescription>Edits are highlighted. Don't forget to save.</CardDescription>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Bulk Actions:</span>
-                        <Button variant="secondary" size="sm" onClick={() => applyBulkPriceChange(5)}>
-                            <Percent className="h-3 w-3 mr-1" /> +5% Price
-                        </Button>
-                        <Button variant="secondary" size="sm" onClick={() => applyBulkPriceChange(10)}>
-                            <Percent className="h-3 w-3 mr-1" /> +10% Price
-                        </Button>
+
+                    <div className="flex items-center gap-4 flex-wrap">
+                        {/* Category Filter */}
+                        <div className="w-[180px]">
+                            <Select
+                                value={selectedCategory}
+                                onValueChange={setSelectedCategory}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All Categories" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">All Categories</SelectItem>
+                                    <SelectItem value="Nutritional Care">Nutritional Care</SelectItem>
+                                    <SelectItem value="Health Care">Health Care</SelectItem>
+                                    <SelectItem value="Personal Care">Personal Care</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="h-8 w-px bg-border hidden md:block" />
+
+                        {/* Valid Bulk Actions */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground whitespace-nowrap">Price Action:</span>
+                            <div className="flex items-center border rounded-md overflow-hidden bg-background">
+                                <Input
+                                    type="number"
+                                    className="w-16 h-8 border-none focus-visible:ring-0 rounded-none text-right"
+                                    placeholder="%"
+                                    value={bulkPercent}
+                                    onChange={(e) => setBulkPercent(e.target.value)}
+                                />
+                                <div className="h-4 w-px bg-border mx-1" />
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 rounded-none px-2 hover:bg-muted"
+                                    onClick={() => applyBulkPriceChange(parseFloat(bulkPercent))}
+                                    disabled={!bulkPercent}
+                                >
+                                    Apply
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -156,47 +197,49 @@ export default function BulkEditPage() {
                                         <TableCell colSpan={5} className="text-center h-40">Loading...</TableCell>
                                     </TableRow>
                                 ) : (
-                                    products.map(product => {
-                                        const isModified = !!edits[product.id];
-                                        const editedData = edits[product.id] || {};
+                                    products
+                                        .filter(p => selectedCategory === 'ALL' || p.categoryId === selectedCategory)
+                                        .map(product => {
+                                            const isModified = !!edits[product.id];
+                                            const editedData = edits[product.id] || {};
 
-                                        return (
-                                            <TableRow key={product.id} className={isModified ? "bg-primary/5" : ""}>
-                                                <TableCell className="font-medium">
-                                                    <div className="flex flex-col">
-                                                        <span>{product.name}</span>
-                                                        <span className="text-xs text-muted-foreground">{product.id.slice(0, 6)}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>{product.categoryId}</TableCell>
-                                                <TableCell>
-                                                    <Input
-                                                        type="number"
-                                                        value={editedData.price ?? product.price}
-                                                        onChange={(e) => handleEdit(product.id, 'price', parseFloat(e.target.value))}
-                                                        className={editedData.price !== undefined ? "border-primary font-bold" : ""}
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    {/* Assuming 'stock' exists on Product type, if not will need to check types.ts. Usually it's in Warehouse but let's assume global/default stock field for simple model */}
-                                                    <Input
-                                                        type="number"
-                                                        value={editedData.stock ?? (product.stock || 0)}
-                                                        onChange={(e) => handleEdit(product.id, 'stock', parseInt(e.target.value))}
-                                                        className={editedData.stock !== undefined ? "border-primary font-bold" : ""}
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center space-x-2">
-                                                        <Switch
-                                                            checked={editedData.isActive ?? product.isActive ?? true}
-                                                            onCheckedChange={(checked) => handleEdit(product.id, 'isActive', checked)}
+                                            return (
+                                                <TableRow key={product.id} className={isModified ? "bg-primary/5" : ""}>
+                                                    <TableCell className="font-medium">
+                                                        <div className="flex flex-col">
+                                                            <span>{product.name}</span>
+                                                            <span className="text-xs text-muted-foreground">{product.id.slice(0, 6)}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>{product.categoryId}</TableCell>
+                                                    <TableCell>
+                                                        <Input
+                                                            type="number"
+                                                            value={editedData.price ?? product.price}
+                                                            onChange={(e) => handleEdit(product.id, 'price', parseFloat(e.target.value))}
+                                                            className={editedData.price !== undefined ? "border-primary font-bold" : ""}
                                                         />
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {/* Assuming 'stock' exists on Product type, if not will need to check types.ts. Usually it's in Warehouse but let's assume global/default stock field for simple model */}
+                                                        <Input
+                                                            type="number"
+                                                            value={editedData.stock ?? (product.stock || 0)}
+                                                            onChange={(e) => handleEdit(product.id, 'stock', parseInt(e.target.value))}
+                                                            className={editedData.stock !== undefined ? "border-primary font-bold" : ""}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center space-x-2">
+                                                            <Switch
+                                                                checked={editedData.isActive ?? product.isActive ?? true}
+                                                                onCheckedChange={(checked) => handleEdit(product.id, 'isActive', checked)}
+                                                            />
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
                                 )}
                             </TableBody>
                         </Table>

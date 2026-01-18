@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, doc, deleteDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Banner } from '@/lib/types';
@@ -43,9 +43,12 @@ export default function BannersPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
 
-    const { data: banners, isLoading } = useCollection<Banner>(
-        query(collection(firestore!, 'banners'), orderBy('order', 'asc'))
-    );
+    const bannerQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'banners'), orderBy('order', 'asc'));
+    }, [firestore]);
+
+    const { data: banners, isLoading } = useCollection<Banner>(bannerQuery);
 
     const form = useForm<BannerFormData>({
         resolver: zodResolver(bannerSchema),

@@ -46,6 +46,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
 import { logAdminAction } from "@/lib/audit-logger";
+import { CustomerSegmentsView } from "@/components/admin/users/customer-segments-view";
 
 const roleIcons: { [key: string]: React.ReactNode } = {
   superadmin: <Crown className="h-3.5 w-3.5" />,
@@ -173,9 +174,10 @@ export default function AdminUsersPage() {
       </div>
 
       <Tabs defaultValue="customers" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-lg grid-cols-3">
           <TabsTrigger value="customers">Customers ({customers.length})</TabsTrigger>
-          <TabsTrigger value="staff">Admins & Staff ({admins.length})</TabsTrigger>
+          <TabsTrigger value="staff">Admins ({admins.length})</TabsTrigger>
+          <TabsTrigger value="segments">Segments 🚀</TabsTrigger>
         </TabsList>
 
         <TabsContent value="customers">
@@ -200,6 +202,10 @@ export default function AdminUsersPage() {
               <UsersTable users={admins} isLoading={isLoading} warehouses={warehouses} roleColors={roleColors} roleIcons={roleIcons} handlePasswordReset={handlePasswordReset} handleRoleChange={handleRoleChange} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="segments">
+          <CustomerSegmentsView />
         </TabsContent>
       </Tabs>
 

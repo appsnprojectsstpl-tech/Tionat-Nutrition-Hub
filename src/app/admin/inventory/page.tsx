@@ -1,204 +1,54 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
-import { Product, WarehouseInventory, Warehouse } from '@/lib/types';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, SlidersHorizontal, AlertTriangle } from "lucide-react";
-import { WarehouseStockManager } from "@/components/admin/warehouse-stock-manager";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { InventoryView } from "@/components/admin/inventory/inventory-view";
+import { TransfersView } from "@/components/admin/inventory/transfers-view";
+import { PurchaseOrdersView } from "@/components/admin/inventory/purchase-orders-view";
+import { WarehousesView } from "@/components/admin/inventory/warehouses-view";
+import { LabelsView } from "@/components/admin/inventory/labels-view";
+import { AlertsSettingsView } from "@/components/admin/inventory/alerts-view";
 
-export default function InventoryPage() {
-    const { userProfile, isUserLoading } = useUser();
-    const firestore = useFirestore();
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-    const [isStockManagerOpen, setIsStockManagerOpen] = useState(false);
-
-    // Queries
-    const productsCollection = useMemoFirebase(
-        () => firestore ? collection(firestore, 'products') : null,
-        [firestore]
-    );
-    const { data: products, isLoading: isProductsLoading } = useCollection<Product>(productsCollection);
-
-    // We fetch ALL warehouses to pass to the Manager component, 
-    // but we will lock it to the user's warehouse.
-    const warehousesCollection = useMemoFirebase(
-        () => firestore ? collection(firestore, 'warehouses') : null,
-        [firestore]
-    );
-    const { data: warehouses, isLoading: isWarehousesLoading } = useCollection<Warehouse>(warehousesCollection);
-
-    // Filter logic
-    const filteredProducts = useMemo(() => {
-        if (!products) return [];
-        return products.filter(p =>
-            p.name.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [products, searchTerm]);
-
-    const isLoading = isUserLoading || isProductsLoading || isWarehousesLoading;
-
-    if (isLoading) {
-        return (
-            <div className="flex h-[50vh] items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-        );
-    }
-
-    if (!userProfile) return null;
-
-    // Safety Check
-    const managedWarehouseId = userProfile.role === 'warehouse_admin' ? userProfile.managedWarehouseId : null;
-    const isSuperAdmin = userProfile.role === 'superadmin';
-
-    if (!isSuperAdmin && !managedWarehouseId) {
-        return (
-            <div className="flex flex-col items-center justify-center h-[50vh] text-center">
-                <AlertTriangle className="h-10 w-10 text-yellow-500 mb-4" />
-                <h2 className="text-xl font-bold">Access Restricted</h2>
-                <p className="text-muted-foreground">
-                    You are not assigned to manage any specific warehouse.
-                    Please contact an administrator.
-                </p>
-            </div>
-        )
-    }
-
-    const currentWarehouse = warehouses?.find(w => w.id === managedWarehouseId);
-
-    const handleOpenStockManager = (product: Product) => {
-        setSelectedProduct(product);
-        setIsStockManagerOpen(true);
-    };
-
+export default function InventoryHubPage() {
     return (
         <div className="space-y-6">
-            <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold font-headline tracking-tight">Inventory Management</h1>
-                <p className="text-muted-foreground">
-                    {isSuperAdmin
-                        ? "Manage stock across all locations."
-                        : `Managing inventory for: ${currentWarehouse?.name || 'Unknown Warehouse'}`
-                    }
-                </p>
-            </div>
+            <h1 className="text-3xl font-bold font-headline tracking-tight">Inventory Management</h1>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Products & Stock</CardTitle>
-                    <CardDescription>
-                        Update stock levels for your warehouse.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="relative flex-1 max-w-sm">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search products..."
-                                className="pl-8"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-                    </div>
+            <Tabs defaultValue="stock" className="w-full">
+                <TabsList className="grid w-full grid-cols-5 lg:w-[800px]">
+                    <TabsTrigger value="stock">Stock Levels</TabsTrigger>
+                    <TabsTrigger value="transfers">Transfers</TabsTrigger>
+                    <TabsTrigger value="po">Purchase Orders</TabsTrigger>
+                    <TabsTrigger value="warehouses">Warehouses</TabsTrigger>
+                    <TabsTrigger value="labels">Barcode Labels</TabsTrigger>
+                    <TabsTrigger value="settings">Alerts & Settings</TabsTrigger>
+                </TabsList>
 
-                    <div className="border rounded-md">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-[80px]">Image</TableHead>
-                                    <TableHead>Product Name</TableHead>
-                                    <TableHead>Category</TableHead>
-                                    <TableHead>Catalog Status</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredProducts.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
-                                            No products found matching your search.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    filteredProducts.map((product) => (
-                                        <TableRow key={product.id}>
-                                            <TableCell>
-                                                {product.imageUrl ? (
-                                                    <img
-                                                        src={product.imageUrl}
-                                                        alt={product.name}
-                                                        className="h-10 w-10 object-cover rounded-md border"
-                                                    />
-                                                ) : (
-                                                    <div className="h-10 w-10 bg-muted rounded-md flex items-center justify-center text-xs text-muted-foreground">
-                                                        Img
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="font-medium">{product.name}</TableCell>
-                                            <TableCell>
-                                                {/* In real app, map category ID to name, for now just ID or placeholder */}
-                                                <span className="text-xs text-muted-foreground font-mono">
-                                                    {product.categoryId}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant={product.status === 'Available' ? 'outline' : 'secondary'}>
-                                                    {product.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button
-                                                    size="sm"
-                                                    variant="secondary"
-                                                    onClick={() => handleOpenStockManager(product)}
-                                                >
-                                                    <SlidersHorizontal className="h-4 w-4 mr-2" />
-                                                    Manage Stock
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
+                <div className="mt-4">
+                    <TabsContent value="stock">
+                        <InventoryView />
+                    </TabsContent>
 
-            {/* Warehouse Stock Manager Modal */}
-            {selectedProduct && warehouses && (
-                <WarehouseStockManager
-                    open={isStockManagerOpen}
-                    onOpenChange={setIsStockManagerOpen}
-                    product={selectedProduct}
-                    warehouses={warehouses}
-                    // If SuperAdmin, don't lock. If WarehouseAdmin, lock to managed ID.
-                    lockedWarehouseId={isSuperAdmin ? undefined : managedWarehouseId!}
-                />
-            )}
+                    <TabsContent value="transfers">
+                        <TransfersView />
+                    </TabsContent>
+
+                    <TabsContent value="po">
+                        <PurchaseOrdersView />
+                    </TabsContent>
+
+                    <TabsContent value="warehouses">
+                        <WarehousesView />
+                    </TabsContent>
+
+                    <TabsContent value="labels">
+                        <LabelsView />
+                    </TabsContent>
+
+                    <TabsContent value="settings">
+                        <AlertsSettingsView />
+                    </TabsContent>
+                </div>
+            </Tabs>
         </div>
     );
 }

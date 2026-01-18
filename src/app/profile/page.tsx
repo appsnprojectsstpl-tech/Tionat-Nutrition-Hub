@@ -44,7 +44,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Star, ChevronRight, LogOut, Shield, Edit, Home, Trash2, PlusCircle, ShoppingBag, RefreshCw, Download, Wallet, Heart, Gift } from "lucide-react";
+import { Star, ChevronRight, LogOut, Shield, Edit, Home, Trash2, PlusCircle, ShoppingBag, RefreshCw, Download, Wallet, Heart, Gift, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth, useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
 import { doc, collection, query, orderBy, arrayUnion, arrayRemove, getDoc, getDocs } from "firebase/firestore";
@@ -450,6 +450,56 @@ export default function ProfilePage() {
                                 </Button>
                             </CardContent>
                         </Card>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="mt-8 border-red-200 bg-red-50/50">
+                            <CardHeader>
+                                <CardTitle className="text-red-600 flex items-center gap-2 text-base">
+                                    <ShieldAlert className="h-5 w-5" /> Danger Zone
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <Dialog>
+                                    <DialogTrigger asChild>
+                                        <Button variant="destructive" className="w-full">
+                                            Delete Account
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                        <DialogHeader>
+                                            <DialogTitle>Delete Account</DialogTitle>
+                                            <DialogDescription>
+                                                Are you sure? This action cannot be undone. All your data will be permanently deleted.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <DialogFooter>
+                                            <Button variant="outline" onClick={() => {}}>Cancel</Button>
+                                            <Button variant="destructive" onClick={async () => {
+                                                if (!auth?.currentUser || !userProfileRef) return;
+                                                try {
+                                                     await setDocumentNonBlocking(userProfileRef, { 
+                                                        isDeleted: true, 
+                                                        deletedAt: new Date().toISOString() 
+                                                     }, { merge: true });
+                                                     
+                                                     import('firebase/auth').then(async ({ deleteUser }) => {
+                                                        await deleteUser(auth.currentUser!);
+                                                        router.push('/');
+                                                        toast({ title: "Account Deleted", description: "Your account has been deleted." });
+                                                     });
+                                                } catch (e) {
+                                                    toast({ title: "Error", description: "Login again and try.", variant: "destructive" });
+                                                }
+                                            }}>Confirm Delete</Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
+                                <p className="text-xs text-red-600 mt-2 text-center">
+                                    GDPR Compliant Deletion
+                                </p>
+                            </CardContent>
+                        </Card>
                     </div>
                     <div className="md:col-span-2 space-y-8">
                         <Card>
@@ -508,23 +558,7 @@ export default function ProfilePage() {
                             </CardContent>
                         </Card>
 
-                        <Card className="bg-gradient-to-r from-gray-50 to-white">
-                            <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                <CardTitle className="text-base font-headline flex items-center gap-2">
-                                    <Wallet className="h-5 w-5 text-green-600" />
-                                    Wallet & Refunds
-                                </CardTitle>
-                                <Button variant="ghost" size="sm" asChild>
-                                    <Link href="/profile/wallet">View History <ChevronRight className="ml-1 h-3 w-3" /></Link>
-                                </Button>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-bold">₹{(userProfile.walletBalance || 0).toFixed(2)}</span>
-                                    <span className="text-xs text-muted-foreground">Available Balance</span>
-                                </div>
-                            </CardContent>
-                        </Card>
+
 
                         <Card className="bg-gradient-to-r from-pink-50 to-white">
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -630,7 +664,7 @@ export default function ProfilePage() {
                             </CardContent>
                         </Card>
                     </div>
-                </div>
+                </div >
             </main >
         </div >
     );

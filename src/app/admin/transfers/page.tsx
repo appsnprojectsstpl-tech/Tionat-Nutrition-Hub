@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, addDoc, serverTimestamp, doc, runTransaction, increment } from 'firebase/firestore';
 import { Product, Warehouse } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -18,13 +18,19 @@ export default function StockTransferPage() {
     const { toast } = useToast();
     const [isTransferring, setIsTransferring] = useState(false);
 
-    const { data: warehouses } = useCollection<Warehouse>(
-        firestore ? collection(firestore, 'warehouses') : null
-    );
+    const warehousesQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return collection(firestore, 'warehouses');
+    }, [firestore]);
 
-    const { data: products } = useCollection<Product>(
-        firestore ? collection(firestore, 'products') : null
-    );
+    const { data: warehouses } = useCollection<Warehouse>(warehousesQuery);
+
+    const productsQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return collection(firestore, 'products');
+    }, [firestore]);
+
+    const { data: products } = useCollection<Product>(productsQuery);
 
     const [sourceId, setSourceId] = useState('');
     const [destId, setDestId] = useState('');

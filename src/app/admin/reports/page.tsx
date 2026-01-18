@@ -1,6 +1,6 @@
 'use client';
 
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { Order, Product } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,14 +16,20 @@ export default function ReportsPage() {
     // 1. Fetch Paid/Delivered Orders
     // Simplified: Fetch all non-cancelled for now to see volume? Or just Paid/Delivered.
     // Financials usually only count Paid/Delivered.
-    const { data: orders, isLoading: ordersLoading } = useCollection<Order>(
-        firestore ? query(collection(firestore, 'orders'), orderBy('createdAt', 'desc')) : null
-    );
+    const ordersQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
+    }, [firestore]);
+
+    const { data: orders, isLoading: ordersLoading } = useCollection<Order>(ordersQuery);
 
     // 2. Fetch Products for Cost Price
-    const { data: products } = useCollection<Product>(
-        firestore ? collection(firestore, 'products') : null
-    );
+    const productsQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return collection(firestore, 'products');
+    }, [firestore]);
+
+    const { data: products } = useCollection<Product>(productsQuery);
 
     // Compute Financials
     const validOrders = orders?.filter(o => ['Paid', 'Shipped', 'Delivered'].includes(o.status)) || [];

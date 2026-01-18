@@ -135,64 +135,101 @@ export default function AdminDashboard() {
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">₹{totalRevenue.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
               {selectedWarehouseId === 'All' ? 'Across all stores' : `For ${activeWarehouseName}`}
             </p>
           </CardContent>
         </Card>
-        <Link href="/admin/products">
-          <Card className="hover:bg-muted transition-colors">
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Average Order Value</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ₹{(filteredOrders && filteredOrders.length > 0 ? totalRevenue / filteredOrders.length : 0).toFixed(0)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Per order average
+            </p>
+          </CardContent>
+        </Card>
+
+        <Link href="/admin/orders?status=Pending">
+          <Card className="hover:bg-muted transition-colors border-orange-200 bg-orange-50/50">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-orange-900">Pending Orders</CardTitle>
+              <ShoppingCart className="h-4 w-4 text-orange-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{products?.length ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                In your catalog
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/admin/orders">
-          <Card className="hover:bg-muted transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{filteredOrders?.length ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                Processed in {selectedWarehouseId !== 'All' ? 'selected store' : 'total'}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/admin/users">
-          <Card className="hover:bg-muted transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{customers?.length ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                Registered in the system
+              <div className="text-2xl font-bold text-orange-700">
+                {filteredOrders?.filter(o => o.status === 'Pending').length ?? 0}
+              </div>
+              <p className="text-xs text-orange-600/80">
+                Requires processing
               </p>
             </CardContent>
           </Card>
         </Link>
       </div>
 
-      {/* Analytics Charts Section */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-4">
+
+
+      <Link href="/admin/products">
+        <Card className="hover:bg-muted transition-colors">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{products?.length ?? 0}</div>
+            <p className="text-xs text-muted-foreground">
+              In your catalog
+            </p>
+          </CardContent>
+        </Card>
+      </Link>
+      <Link href="/admin/orders">
+        <Card className="hover:bg-muted transition-colors">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{filteredOrders?.length ?? 0}</div>
+            <p className="text-xs text-muted-foreground">
+              Processed in {selectedWarehouseId !== 'All' ? 'selected store' : 'total'}
+            </p>
+          </CardContent>
+        </Card>
+      </Link>
+      <Link href="/admin/users">
+        <Card className="hover:bg-muted transition-colors">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{customers?.length ?? 0}</div>
+            <p className="text-xs text-muted-foreground">
+              Registered in the system
+            </p>
+          </CardContent>
+        </Card>
+      </Link>
+    </div>
+
+      {/* Analytics Charts Section */ }
       <div className="mt-8">
         <AnalyticsCharts orders={filteredOrders || []} />
       </div>
@@ -259,6 +296,6 @@ export default function AdminDashboard() {
           </CardFooter>
         </Card>
       </div>
-    </div>
+    </div >
   );
 }

@@ -12,6 +12,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
     { media: '(prefers-color-scheme: dark)', color: '#4c1d95' }, // violet-900
@@ -72,6 +73,7 @@ const outfit = Outfit({
 });
 
 import { AppShell } from "@/components/app-shell";
+import { MaintenanceGuard } from "@/components/maintenance-guard";
 
 export default function RootLayout({
   children,
@@ -81,10 +83,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`tionat ${outfit.variable}`}>
       <head>
-        {/* Prevent WebView caching */}
-        <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-        <meta httpEquiv="Pragma" content="no-cache" />
-        <meta httpEquiv="Expires" content="0" />
+        {/* Optimized for Production */}
       </head>
       <body className="font-body antialiased bg-background">
         <ThemeProvider
@@ -98,9 +97,11 @@ export default function RootLayout({
               <CartProvider>
                 <WarehouseProvider>
                   <PincodeGuard />
-                  <AppShell>
-                    {children}
-                  </AppShell>
+                  <MaintenanceGuard>
+                    <AppShell>
+                      {children}
+                    </AppShell>
+                  </MaintenanceGuard>
 
                 </WarehouseProvider>
               </CartProvider>

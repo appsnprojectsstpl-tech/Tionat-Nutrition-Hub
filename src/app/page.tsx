@@ -64,6 +64,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import { useWarehouseProducts } from '@/hooks/use-warehouse-products';
+import { FlashSaleBanner } from '@/components/flash-sale-banner';
 
 
 
@@ -141,6 +142,9 @@ export default function Home() {
             {/* Initialize push notifications and update checking */}
             <NotificationHandler />
             <UpdateChecker />
+
+            {/* Flash Sale Top Banner */}
+            <FlashSaleBanner />
 
             {/* <AppHeader /> removed, using AppShell */}
             <main className="flex-1 pb-16 relative">
@@ -292,7 +296,13 @@ export default function Home() {
 
 function FloatingCartBar() {
     const { items, subtotal } = useCart();
+    const [isMounted, setIsMounted] = useState(false);
 
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) return null;
     if (items.length === 0) return null;
 
     return (

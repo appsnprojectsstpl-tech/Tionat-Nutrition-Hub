@@ -11,14 +11,54 @@ import { AlertTriangle, Activity, Lock, FileText, ShieldAlert } from "lucide-rea
 import { useFirestore, useUser } from "@/firebase";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
+import { updateDocumentNonBlocking, setDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
 export default function SystemHealthPage() {
     const firestore = useFirestore();
     const { userProfile } = useUser();
     const { toast } = useToast();
 
-    // Mock State for now - will connect to DB next
-    const [isEmergencyReadOnly, setIsEmergencyReadOnly] = useState(false);
+    // Real DB State
+    const [settings, setSettings] = useState<any>(null);
+
+    // Listen to System Settings
+    const settingsRef = doc(firestore, 'system', 'settings');
+    import { onSnapshot } from "firebase/firestore";
+    import { useEffect } from "react";
+
+    useEffect(() => {
+        if (!firestore) return;
+        const unsub = onSnapshot(doc(firestore, 'system/settings'), (doc) => {
+            setSettings(doc.data());
+        });
+        return () => unsub();
+    }, [firestore]);
+
+
+    const toggleMaintenanceMode = async () => {
+        const newState = !settings?.maintenanceMode;
+        try {
+            await updateDocumentNonBlocking(settingsRef, { maintenanceMode: newState }, { merge: true });
+            toast({
+                title: newState ? "MAINTENANCE MODE ON" : "Maintenance Mode Off",
+                description: newState ? "Storefront is now locked." : "Storefront is live.",
+                variant: newState ? "destructive" : "default"
+            });
+        } catch (e) {
+            // Create if missing
+            await setDocumentNonBlocking(settingsRef, { maintenanceMode: newState }, { merge: true });
+        }
+    };
+
+    const toggleEmergencyMode = async () => {
+        const newState = !settings?.emergencyReadOnly;
+        await updateDocumentNonBlocking(settingsRef, { emergencyReadOnly: newState }, { merge: true });
+        toast({
+            title: newState ? "EMERGENCY MODE ACTIVATED" : "System Normal",
+            description: newState ? "All writes are now blocked globally." : "Write access restored.",
+            variant: newState ? "destructive" : "default"
+        });
+    }
 
     if (userProfile?.role !== 'superadmin') {
         return (
@@ -122,7 +162,23 @@ export default function SystemHealthPage() {
                                     <Label>Default Commission Rate (%)</Label>
                                     <input className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background" defaultValue="10" />
                                 </div>
-                                <Button>Save Changes</Button>
+                                <div className="grid gap-2">
+                                    <Label>Admin Session PIN</Label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                                            placeholder="Set 6-digit PIN"
+                                            defaultValue={settings?.adminPin}
+                                            onChange={(e) => setSettings({ ...settings, adminPin: e.target.value })}
+                                        />
+                                        <Button onClick={async () => {
+                                            if (settings?.adminPin) {
+                                                await updateDocumentNonBlocking(settingsRef, { adminPin: settings.adminPin }, { merge: true });
+                                                toast({ title: "PIN Updated", description: "New Admin PIN saved." });
+                                            }
+                                        }}>Save</Button>
+                                    </div>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -139,6 +195,19 @@ export default function SystemHealthPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
+                            <div className="flex items-center justify-between border p-4 rounded-lg bg-yellow-50/50 mb-4">
+                                <div className="space-y-0.5">
+                                    <Label className="text-base">Maintenance Mode</Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Locks the storefront. Only Admins can access.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={settings?.maintenanceMode || false}
+                                    onCheckedChange={toggleMaintenanceMode}
+                                />
+                            </div>
+
                             <div className="flex items-center justify-between border p-4 rounded-lg bg-red-50/50">
                                 <div className="space-y-0.5">
                                     <Label className="text-base">Emergency Read-Only Mode</Label>
@@ -147,7 +216,7 @@ export default function SystemHealthPage() {
                                     </p>
                                 </div>
                                 <Switch
-                                    checked={isEmergencyReadOnly}
+                                    checked={settings?.emergencyReadOnly || false}
                                     onCheckedChange={toggleEmergencyMode}
                                 />
                             </div>

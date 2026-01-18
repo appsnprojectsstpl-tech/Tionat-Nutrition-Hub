@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Product, CartItem, Coupon } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface CartContextType {
   items: CartItem[];
@@ -28,6 +29,7 @@ const isBrowser = typeof window !== 'undefined';
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
   const { user, isUserLoading } = useAuth();
+  const firestore = useFirestore();
 
   const [items, setItems] = useState<CartItem[]>(() => {
     if (!isBrowser) return [];
@@ -56,6 +58,38 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       window.localStorage.setItem('cart', JSON.stringify(items));
     } catch (error) { }
   }, [items]);
+
+
+
+  // Persist cart to Firestore for logged-in users
+  useEffect(() => {
+    if (!user || !firestore) return;
+
+    // Debounce to avoid too many writes
+    const timeoutId = setTimeout(async () => {
+      try {
+        const cartRef = doc(firestore, 'active_carts', user.uid);
+        if (items.length > 0) {
+          await setDoc(cartRef, {
+            userId: user.uid,
+            email: user.email,
+            items: items,
+            subtotal: subtotal, // Calculated from items
+            lastUpdated: serverTimestamp(),
+            status: 'active'
+          }, { merge: true });
+        } else {
+          // Optional: Delete or mark empty. Let's mark empty? 
+          // actually good to keep for analytics, but for "abandoned" we check items > 0
+          await setDoc(cartRef, { items: [], lastUpdated: serverTimestamp(), status: 'empty' }, { merge: true });
+        }
+      } catch (e) {
+        console.error("Failed to sync cart", e);
+      }
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [items, user, firestore, subtotal]);
 
   // Persist coupon
   useEffect(() => {
@@ -152,7 +186,17 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       discountAmount = 0;
     } else {
       if (coupon.type === 'percentage') {
-        const calculated = (subtotal * coupon.value) / 100;
+        let eligibleAmount = subtotal;
+
+        // Category Constraint Logic
+        if (coupon.applicableCategoryId && coupon.applicableCategoryId !== 'all') {
+          // Calculate total only for items in this category
+          eligibleAmount = items
+            .filter(item => item.product.category === coupon.applicableCategoryId)
+            .reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+        }
+
+        const calculated = (eligibleAmount * coupon.value) / 100;
         discountAmount = coupon.maxDiscount ? Math.min(calculated, coupon.maxDiscount) : calculated;
       } else {
         discountAmount = coupon.value;

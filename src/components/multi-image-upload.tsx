@@ -1,27 +1,4 @@
 import { compressImage } from '@/lib/image-utils';
-
-// ... inside handleUpload loop
-for (let i = 0; i < files.length; i++) {
-    let file = files[i];
-
-    // Compress
-    try {
-        file = await compressImage(file, 800, 800, 0.8);
-    } catch (e) {
-        console.warn("Compression failed, uploading original", e);
-    }
-
-    // Create a unique filename: products/{timestamp}_{random}_{filename}
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(7);
-    const filename = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-    const storageRef = ref(storage, `products/${timestamp}_${random}_${filename}`);
-
-    // Upload
-    await uploadBytes(storageRef, file);
-    const url = await getDownloadURL(storageRef);
-    newUrls.push(url);
-}
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Upload, X, Image as ImageIcon } from 'lucide-react';
@@ -49,7 +26,15 @@ export function MultiImageUpload({ value, onChange, disabled }: MultiImageUpload
 
         try {
             for (let i = 0; i < files.length; i++) {
-                const file = files[i];
+                let file = files[i];
+
+                // Compress
+                try {
+                    file = await compressImage(file, 800, 800, 0.8);
+                } catch (e) {
+                    console.warn("Compression failed, uploading original", e);
+                }
+
                 // Create a unique filename: products/{timestamp}_{random}_{filename}
                 const timestamp = Date.now();
                 const random = Math.random().toString(36).substring(7);

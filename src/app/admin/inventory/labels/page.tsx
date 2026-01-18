@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -13,9 +13,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 export default function BarcodeLabelsPage() {
     const firestore = useFirestore();
 
-    const { data: products } = useCollection<Product>(
-        firestore ? collection(firestore, 'products') : null
-    );
+    const productsQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return collection(firestore, 'products');
+    }, [firestore]);
+
+    const { data: products } = useCollection<Product>(productsQuery);
 
     const [itemSearch, setItemSearch] = useState('');
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);

@@ -7,11 +7,12 @@ import type { Review } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Star, StarHalf } from 'lucide-react';
+import { Star, StarHalf, Image as ImageIcon, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 
 interface ProductReviewsProps {
     productId: string;
@@ -23,6 +24,8 @@ export function ProductReviews({ productId }: ProductReviewsProps) {
     const { toast } = useToast();
     const [rating, setRating] = useState(5);
     const [comment, setComment] = useState('');
+    const [mediaUrl, setMediaUrl] = useState('');
+    const [mediaList, setMediaList] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const reviewsQuery = useMemoFirebase(
@@ -30,6 +33,16 @@ export function ProductReviews({ productId }: ProductReviewsProps) {
         [firestore, productId]
     );
     const { data: reviews, isLoading } = useCollection<Review>(reviewsQuery);
+
+    const handleAddMedia = () => {
+        if (!mediaUrl.trim()) return;
+        setMediaList([...mediaList, mediaUrl.trim()]);
+        setMediaUrl('');
+    };
+
+    const handleRemoveMedia = (index: number) => {
+        setMediaList(mediaList.filter((_, i) => i !== index));
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -48,29 +61,20 @@ export function ProductReviews({ productId }: ProductReviewsProps) {
                 rating,
                 comment,
                 date: Timestamp.now(),
-                productId
+                productId,
+                media: mediaList
             };
 
-            // 1. Add Review to Sub-collection
             await addDocumentNonBlocking(collection(firestore, `products/${productId}/reviews`), newReview);
 
-            // 2. Update Product Aggregates (Note: This is client-side approximation using nonBlocking helper)
-            // Ideally, a Cloud Trigger would handle this for perfect accuracy. 
-            // But for this project, we can just increment reviewCount. 
-            // Rating average calculation is harder to atomic update without data transaction.
-            // So we will just trust the read-render cycle to calculate Average for display 
-            // BUT updating the field on Product is good for sorting.
-            // Let's do a best-effort update:
-            // We can't easily recalculate average without reading all reviews or storing sum.
-            // For now, let's just increment count.
             await setDocumentNonBlocking(doc(firestore, 'products', productId), {
                 reviewCount: increment(1)
-                // rating: // Updating rolling average requires old average + count. 
             }, { merge: true });
 
             toast({ title: "Review Submitted", description: "Thank you for your feedback!" });
             setComment('');
             setRating(5);
+            setMediaList([]);
         } catch (error) {
             console.error(error);
             toast({ title: "Error", description: "Failed to submit review.", variant: "destructive" });
@@ -131,7 +135,6 @@ export function ProductReviews({ productId }: ProductReviewsProps) {
                         {!user ? (
                             <div className="text-center py-4">
                                 <p className="text-muted-foreground mb-4">Please login to write a review.</p>
-                                {/* Link to login is handled by app shell typically or can be added */}
                             </div>
                         ) : (
                             <form onSubmit={handleSubmit} className="space-y-4">
@@ -147,6 +150,40 @@ export function ProductReviews({ productId }: ProductReviewsProps) {
                                     required
                                     className="bg-background"
                                 />
+
+                                {/* Media Input */}
+                                <div className="space-y-3">
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="Paste image URL here..."
+                                            value={mediaUrl}
+                                            onChange={(e) => setMediaUrl(e.target.value)}
+                                            className="bg-background"
+                                        />
+                                        <Button type="button" variant="secondary" onClick={handleAddMedia}>
+                                            <ImageIcon className="h-4 w-4 mr-2" />
+                                            Add Photo
+                                        </Button>
+                                    </div>
+                                    {/* Media Preview Wrappers */}
+                                    {mediaList.length > 0 && (
+                                        <div className="flex flex-wrap gap-2">
+                                            {mediaList.map((url, idx) => (
+                                                <div key={idx} className="relative group">
+                                                    <img src={url} alt="preview" className="h-20 w-20 object-cover rounded-md border" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveMedia(idx)}
+                                                        className="absolute -top-1 -right-1 bg-destructive text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
                                 <Button type="submit" disabled={isSubmitting}>
                                     {isSubmitting ? 'Submitting...' : 'Submit Review'}
                                 </Button>
@@ -164,11 +201,11 @@ export function ProductReviews({ productId }: ProductReviewsProps) {
                             <p className="text-muted-foreground text-center py-8">No reviews yet. Be the first to review!</p>
                         ) : (
                             reviews?.map((review) => (
-                                <div key={review.id} className="flex gap-4">
+                                <div key={review.id} className="flex flex-col sm:flex-row gap-4 border-b pb-6 last:border-0 last:pb-0">
                                     <Avatar className="h-10 w-10">
                                         <AvatarFallback>{review.userName.charAt(0)}</AvatarFallback>
                                     </Avatar>
-                                    <div className="grid gap-1 flex-1">
+                                    <div className="grid gap-2 flex-1">
                                         <div className="flex items-center justify-between">
                                             <h4 className="font-semibold text-sm">{review.userName}</h4>
                                             <span className="text-xs text-muted-foreground">
@@ -177,6 +214,21 @@ export function ProductReviews({ productId }: ProductReviewsProps) {
                                         </div>
                                         {renderStars(review.rating)}
                                         <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{review.comment}</p>
+
+                                        {/* Review Media */}
+                                        {review.media && review.media.length > 0 && (
+                                            <div className="flex gap-2 mt-2 flex-wrap">
+                                                {review.media.map((url, i) => (
+                                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                                        <img
+                                                            src={url}
+                                                            alt={`Review attachment ${i + 1}`}
+                                                            className="h-24 w-24 object-cover rounded-md border hover:opacity-90 transition-opacity"
+                                                        />
+                                                    </a>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))
