@@ -8,10 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
+import { Badge } from "@/components/ui/badge";
+import { logUserAction } from '@/lib/audit-logger';
 import { Label } from '@/components/ui/label';
 import { useCart } from '@/hooks/use-cart';
+import { useCheckoutValidation } from '@/hooks/use-checkout-validation';
+import { useReservation } from '@/hooks/use-reservation'; // Added import
 import { useAuth, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
-import { collection, doc, writeBatch, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp, increment, runTransaction, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { UserProfile, Order } from '@/lib/types';
@@ -129,105 +133,223 @@ export default function CheckoutPage() {
     if (pincode) setValue('pincode', pincode);
   }
 
+  // ... inside component
+  const { validateStock, isValidating: isValidatingStock } = useCheckoutValidation(firestore);
+  const { createReservation } = useReservation(); // Import hook
+
+  // Reserve stock on mount if possible
+  useEffect(() => {
+    if (items.length > 0 && userProfile?.addresses?.[0]) {
+      // We need to resolve warehouse first. 
+      // For MVP, skipping auto-reservation on mount to avoid complexity of resolving warehouse again.
+      // We will reserve immediately on "Pay" click before processing.
+    }
+  }, [items, userProfile]);
+
   const handlePayment = async (formData: ShippingFormData) => {
     if (!user || !firestore) return;
     setIsSubmitting(true);
 
     try {
-      // 1. Create Order Client-Side (No Backend Function)
-      // NOTE: Logic moved here as per user request to avoid backend functions
+      // 0. Validate Stock
+      // ... previous stock logic ...
 
+      // -1. PRICE LOCK CHECK (New Security Layer)
+      let priceMismatch = false;
+      const latestPrices: Record<string, number> = {};
+
+      for (const item of items) {
+        const productDoc = await getDoc(doc(firestore, 'products', item.product.id)); // Direct fetch (bypassing cache if possible/needed)
+        if (productDoc.exists()) {
+          const liveData = productDoc.data();
+          const livePrice = liveData?.price || 0;
+
+          if (livePrice !== item.product.price) {
+            priceMismatch = true;
+            latestPrices[item.product.id] = livePrice;
+            console.warn(`Price mismatch for ${item.product.name}: Cart ${item.product.price} vs Live ${livePrice}`);
+          }
+        }
+      }
+
+      if (priceMismatch) {
+        // In a real app, update the cart automatically here. 
+        // For now, we block and ask user to refresh/re-add.
+        toast({
+          title: "Price Update Detected",
+          description: "One or more items in your cart have changed price. Please refresh the page and review your cart.",
+          variant: "destructive"
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      const validation = await validateStock(items, formData.pincode);
+      if (!validation.isValid) {
+        toast({
+          title: "Stock Issue",
+          description: validation.errors[0],
+          variant: "destructive"
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      const fulfillingWarehouseId = validation.warehouseId;
+
+      // 0.5 RESERVE STOCK (New)
+      await createReservation(items, fulfillingWarehouseId!);
+
+      // PREPARE ID (Hoisted for scope access)
       const orderRef = doc(collection(firestore, 'orders'));
       const orderId = orderRef.id;
+      let finalPayable = 0;
 
-      // Fees
-      const deliveryFee = 0; // Hardcoded free for now or from settings
-      const tax = 0; // Simplified
+      // 1. Create Order ATOMICALLY (Transaction)
+      await runTransaction(firestore, async (transaction) => {
+        // A. READS
+        const warehouseRef = doc(firestore, 'warehouses', fulfillingWarehouseId!);
+        const warehouseDoc = await transaction.get(warehouseRef);
 
-      // Loyalty Calculation
-      let loyaltyDiscount = 0;
-      let pointsToDeduct = 0;
-      if (redeemPoints && userProfile?.loyaltyPoints) {
-        // Redemption: 10 pts = 1 Rupee
-        // Max redeemable: min(UserPoints, Total * 10) logic? 
-        // Let's keep it simple: Redeem all available or up to total value
+        if (!warehouseDoc.exists()) throw new Error("Warehouse not found");
+        const whData = warehouseDoc.data();
 
-        const potentialDiscount = userProfile.loyaltyPoints / 10;
-        // Discount cannot exceed total (after coupon)
-        loyaltyDiscount = Math.min(potentialDiscount, total);
-        pointsToDeduct = Math.ceil(loyaltyDiscount * 10);
-      }
-
-      // Final Total Logic
-      // "total" from useCart already has coupon discount.
-      // We need to apply loyalty discount on top of that.
-      const finalPayable = total - loyaltyDiscount;
-
-      // Points Earned: 1 pt per 100 Rs spent (on final amount)
-      const pointsEarned = Math.floor(finalPayable / 100);
-
-      const orderPayload: Order = {
-        id: orderId,
-        userId: user.uid,
-        orderDate: serverTimestamp(),
-        totalAmount: finalPayable,
-        status: 'Pending',
-        shippingAddress: {
-          name: formData.name,
-          address: formData.address,
-          city: formData.city,
-          pincode: formData.pincode,
-          phone: formData.phone
-        },
-        orderItems: items.map(item => ({
-          productId: item.product.id,
-          name: item.product.name,
-          price: item.product.price,
-          quantity: item.quantity,
-          image: item.product.imageUrl
-        })),
-        paymentMethod: formData.paymentMethod,
-        discountApplied: discountAmount + loyaltyDiscount,
-        couponCode: coupon ? coupon.code : null,
-      };
-
-      // Batch Write
-      const batch = writeBatch(firestore);
-      batch.set(orderRef, orderPayload);
-
-      const userOrderRef = doc(firestore, `users/${user.uid}/orders`, orderId);
-      batch.set(userOrderRef, orderPayload);
-
-      // Increment Coupon Usage (Client Side - Optimistic)
-      if (coupon && coupon.id) {
-        const couponRef = doc(firestore, 'coupons', coupon.id);
-        batch.update(couponRef, { usedCount: increment(1) });
-      }
-
-      // 3. Create Notification
-      const notificationRef = doc(collection(firestore, `users/${user.uid}/notifications`));
-      batch.set(notificationRef, {
-        title: "Order Placed",
-        body: `Your order #${orderId.slice(0, 6)} has been successfully placed.`,
-        type: 'order',
-        isRead: false,
-        createdAt: serverTimestamp(),
-        link: `/order-confirmation?orderId=${orderId}`
-      });
-
-      // 4. Update Loyalty Points (Deduct used, Add earned)
-      if (userProfileRef) {
-        let pointChange = pointsEarned;
-        if (pointsToDeduct > 0) {
-          pointChange -= pointsToDeduct;
+        // STRICT GOVERNANCE: Kill Switch Check (Step 5.3 in Constitution)
+        if (whData.isActive === false) {
+          throw new Error("Store is currently halted for maintenance. No orders accepted.");
         }
-        // Using increment with negative or positive value
-        batch.update(userProfileRef, {
-          loyaltyPoints: increment(pointChange)
+
+        // STRICT GOVERNANCE: Operating Hours (Step 4.1 in Constitution)
+        // Parse Admin Configured Hours (Format: "HH:mm") or buffer default "09:00" to "22:00"
+        const nowTime = new Date();
+        const currentHour = nowTime.getHours();
+        const currentMinute = nowTime.getMinutes();
+        const currentTimeVal = currentHour * 60 + currentMinute;
+
+        const parseTime = (timeStr: string | undefined, defaultStr: string) => {
+          const [h, m] = (timeStr || defaultStr).split(':').map(Number);
+          return h * 60 + (m || 0);
+        };
+
+        const openTimeVal = parseTime(whData.openingTime, "09:00");
+        const closeTimeVal = parseTime(whData.closingTime, "22:00");
+
+        if (currentTimeVal < openTimeVal || currentTimeVal >= closeTimeVal) {
+          throw new Error(`Store is closed. Operating hours are from ${whData.openingTime || '09:00'} to ${whData.closingTime || '22:00'}.`);
+        }
+
+        // STRICT GOVERNANCE: Capacity Check (Step 4.2 in Constitution)
+        const now = new Date();
+        const slotKey = `${fulfillingWarehouseId}_${now.toISOString().slice(0, 13)}`; // e.g. WH123_2024-01-09T14
+        const statsRef = doc(firestore, 'warehouse_stats', slotKey);
+        const statsDoc = await transaction.get(statsRef);
+
+        let currentSlotCount = 0;
+        if (statsDoc.exists()) {
+          currentSlotCount = statsDoc.data().count || 0;
+        }
+
+        if (currentSlotCount >= 20) {
+          throw new Error("High Traffic: This delivery slot is full. Please try again in the next hour.");
+        }
+
+        const prefix = whData.invoicePrefix || 'GEN';
+        const nextSeq = (whData.currentInvoiceSequence || 0) + 1;
+        const invoiceNumber = `${prefix}-${now.getFullYear()}-${String(nextSeq).padStart(6, '0')}`;
+
+        // Update Slot Count
+        transaction.set(statsRef, { count: increment(1) }, { merge: true });
+
+        const userRef = doc(firestore, 'users', user.uid);
+        const userDoc = await transaction.get(userRef);
+
+        let couponRef = null;
+        let couponDocSnapshot = null;
+        if (coupon && coupon.id) {
+          couponRef = doc(firestore, 'coupons', coupon.id);
+          couponDocSnapshot = await transaction.get(couponRef);
+          if (!couponDocSnapshot.exists()) throw new Error("Coupon invalid");
+        }
+
+        // B. PREPARE DATA
+        // Recalculate basic vals
+        let loyaltyDiscount = 0;
+        let pointsToDeduct = 0;
+        const currentPoints = userDoc.exists() ? (userDoc.data().loyaltyPoints || 0) : 0;
+
+        if (redeemPoints && currentPoints > 0) {
+          const potentialDiscount = currentPoints / 10;
+          loyaltyDiscount = Math.min(potentialDiscount, total);
+          pointsToDeduct = Math.ceil(loyaltyDiscount * 10);
+        }
+
+        // Update outer variable
+        finalPayable = total - loyaltyDiscount;
+        const pointsEarned = Math.floor(finalPayable / 100);
+
+        const orderPayload: Order = {
+          id: orderId,
+          userId: user.uid,
+          orderDate: serverTimestamp(),
+          totalAmount: finalPayable,
+          status: 'Pending',
+          shippingAddress: {
+            name: formData.name,
+            address: formData.address,
+            city: formData.city,
+            pincode: formData.pincode,
+            phone: formData.phone
+          },
+          orderItems: items.map(item => ({
+            productId: item.product.id,
+            name: item.product.name,
+            price: item.product.price,
+            quantity: item.quantity,
+            image: item.product.imageUrl
+          })),
+          paymentMethod: formData.paymentMethod,
+          discountApplied: discountAmount + loyaltyDiscount,
+          couponCode: coupon ? coupon.code : null,
+          warehouseId: fulfillingWarehouseId || 'global',
+          invoiceNumber: invoiceNumber
+        };
+
+        // C. WRITES
+        transaction.set(orderRef, orderPayload);
+        const userOrderRef = doc(firestore, `users/${user.uid}/orders`, orderId);
+        transaction.set(userOrderRef, orderPayload);
+
+        transaction.update(warehouseRef, { currentInvoiceSequence: nextSeq });
+
+        if (couponRef && couponDocSnapshot) {
+          transaction.update(couponRef, { usedCount: increment(1) });
+        }
+
+        const notificationRef = doc(collection(firestore, `users/${user.uid}/notifications`));
+        transaction.set(notificationRef, {
+          title: "Order Placed",
+          body: `Your order #${orderId.slice(0, 6)} has been placed. Invoice: ${invoiceNumber}`,
+          type: 'order',
+          isRead: false,
+          createdAt: serverTimestamp(),
+          link: `/order-confirmation?orderId=${orderId}`
+        });
+
+        if (userRef) {
+          let pointChange = pointsEarned - pointsToDeduct;
+          transaction.update(userRef, { loyaltyPoints: increment(pointChange) });
+        }
+      });
+      // Transaction implicitly committed here.
+
+      // 5. Record Ledger Entry (Async - Independent of Order Success UI)
+      if (fulfillingWarehouseId) {
+        // We don't await this to block UI, but in a real finance app we might want to.
+        // For now, let it run in background.
+        import('@/lib/ledger').then(mod => {
+          mod.recordSaleTransaction(firestore, fulfillingWarehouseId, orderId, finalPayable);
         });
       }
-
-      await batch.commit();
 
       // 2. Handle Payment Flow
       if (formData.paymentMethod === 'COD') {
@@ -237,43 +359,86 @@ export default function CheckoutPage() {
       }
 
       if (formData.paymentMethod === 'RAZORPAY') {
-        // IMPORTANT: Razorpay Order Creation normally requires Secret Key (Server Side).
-        // Client-side only implementation cannot create a Razorpay Order ID securely.
-        // We will use a dummy order ID or skip this step if strictly client-side.
-        // Ideally, we need a lightweight API route just for Razorpay Order creation if not Cloud Functions.
-        // IF the user insisted on "No function", they might mean "No complex business logic function".
-        // BUT Razorpay standard integration REQUIRES server for Order ID generation.
-        // Assuming we simply fallback to Test Mode or basic integration without Order ID (Legacy) or user has an API route?
-        // Since I cannot create easy API routes without deploying, I will alert user.
+        const isTestMode = true; // Hardcoded for this demo phase
 
+        if (isTestMode) {
+          // SIMULATION MODE
+          toast({
+            title: "Processing Test Payment",
+            description: "Simulating successful Razorpay transaction...",
+          });
+
+          // Simulate network delay
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          const dummyPaymentId = `pay_test_${Math.random().toString(36).substring(7)}`;
+
+          // Update order as Paid
+          if (firestore) {
+            const orderDocRef = doc(firestore, 'orders', orderId);
+            // We need to use valid ref. 'orderRef' var from line 170 is for 'orders' collection.
+            // Re-using the references from the transaction scope is hard because they are inside runTransaction.
+            // But we successfully created the order in transaction.
+
+            // We need to update the status now.
+            const updates = {
+              status: 'Paid',
+              'payment.status': 'SUCCESS',
+              'payment.id': dummyPaymentId,
+              'payment.method': 'razorpay'
+            };
+
+            await updateDocumentNonBlocking(orderRef, updates);
+            const userOrderRef = doc(firestore, `users/${user.uid}/orders`, orderId);
+            await updateDocumentNonBlocking(userOrderRef, updates);
+          }
+
+          clearCart();
+          router.push(`/order-confirmation?orderId=${orderId}`);
+
+          if (firestore) {
+            logUserAction(firestore, {
+              userId: user.uid,
+              action: 'ORDER_PLACED',
+              details: `Order #${orderId} placed successfully`,
+              metadata: { amount: total, method: 'RAZORPAY' }
+            });
+          }
+
+          return;
+        }
+
+        // Real production logic would go here (requires backend)
         toast({
           title: "Razorpay Configuration",
-          description: "Online payment requires a backend to generate Order ID. Please use COD for client-only mode.",
+          description: "Online payment requires a backend. Enabled Test Mode above.",
           variant: "destructive"
         });
         setIsSubmitting(false);
         return;
-
-        /*
-          // Legacy / Insecure Client-Side Only Flow (Not recommended but possible for simple testing):
-          const options = {
-              key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-              amount: (total * 100).toString(),
-              currency: "INR",
-              name: "Tionat Nutrition",
-              handler: async (response) => {
-                   // Verify manually or update order
-                   await setDocumentNonBlocking(orderRef, { 
-                       status: 'Paid', 
-                       'payment.status': 'SUCCESS',
-                       'payment.gatewayPaymentId': response.razorpay_payment_id 
-                   }, { merge: true });
-                    clearCart();
-                    router.push(`/order-confirmation?orderId=${orderId}`);
-              }
-          }
-        */
       }
+
+      /*
+        // Legacy / Insecure Client-Side Only Flow (Not recommended but possible for simple testing):
+        const options = {
+            key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+            amount: (total * 100).toString(),
+            currency: "INR",
+            name: "Tionat Nutrition",
+            handler: async (response) => {
+                 // Verify manually or update order
+                 await setDocumentNonBlocking(orderRef, { 
+                     status: 'Paid', 
+                     'payment.status': 'SUCCESS',
+                     'payment.gatewayPaymentId': response.razorpay_payment_id 
+                 }, { merge: true });
+                  clearCart();
+                  router.push(`/order-confirmation?orderId=${orderId}`);
+            }
+        }
+      /*
+        // Legacy / Insecure Client-Side Only Flow ...
+      */
 
     } catch (error: any) {
       console.error("Checkout Error:", error);

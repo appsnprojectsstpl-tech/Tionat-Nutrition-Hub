@@ -44,10 +44,10 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Star, ChevronRight, LogOut, Shield, Edit, Home, Trash2, PlusCircle, ShoppingBag, RefreshCw } from "lucide-react";
+import { Star, ChevronRight, LogOut, Shield, Edit, Home, Trash2, PlusCircle, ShoppingBag, RefreshCw, Download, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth, useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
-import { doc, collection, query, orderBy, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
+import { doc, collection, query, orderBy, arrayUnion, arrayRemove, getDoc, getDocs } from "firebase/firestore";
 import type { UserProfile, Order, Product } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
@@ -57,6 +57,7 @@ import { signOut } from 'firebase/auth';
 import { AddressDialog } from '@/components/address-dialog';
 import { useAddress } from '@/providers/address-provider';
 import { useCart } from '@/hooks/use-cart';
+import { logUserAction } from '@/lib/audit-logger';
 
 // Component to display address list using AddressProvider
 function AddressListComponent({ onDelete, onRefetch }: { onDelete: (address: string) => void, onRefetch: () => void }) {
@@ -161,6 +162,15 @@ export default function ProfilePage() {
             title: "Profile Updated",
             description: "Your information has been successfully saved.",
         });
+
+        if (userProfileRef && user?.uid && firestore) {
+            logUserAction(firestore, {
+                userId: user.uid,
+                action: 'PROFILE_UPDATE',
+                details: 'Updated personal profile details'
+            });
+        }
+
         setIsDialogOpen(false);
     };
 
@@ -189,12 +199,57 @@ export default function ProfilePage() {
             updateDocumentNonBlocking(userProfileRef, {
                 addresses: arrayRemove(addressToDelete)
             });
+
+            if (firestore) {
+                logUserAction(firestore, {
+                    userId: user.uid,
+                    action: 'PROFILE_UPDATE',
+                    details: `Deleted address: ${addressToDelete}`
+                });
+            }
+
             toast({
                 title: 'Address Removed',
                 description: 'The selected address has been deleted.',
                 variant: 'destructive'
             });
             // Refetch not available on hook, but updateDocumentNonBlocking should trigger listener update
+        }
+    };
+
+    const handleDownloadData = async () => {
+        if (!user || !firestore) return;
+        toast({ title: "Preparing Data", description: "Collecting all your information..." });
+
+        try {
+            // 1. Fetch all orders
+            const ordersRef = collection(firestore, `users/${user.uid}/orders`);
+            const ordersSnap = await getDocs(query(ordersRef)); // imports needed
+            const ordersData = ordersSnap.docs.map(d => d.data());
+
+            // 2. Compile Data
+            const exportData = {
+                userProfile: userProfile,
+                orders: ordersData,
+                exportedAt: new Date().toISOString(),
+                compliance: "GDPR Art. 15 / DPDP Act"
+            };
+
+            // 3. Download
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `tionat-data-${user.uid}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            toast({ title: "Download Ready", description: "Your data has been downloaded." });
+        } catch (e) {
+            console.error("Export failed", e);
+            toast({ title: "Export Failed", description: "Could not download data.", variant: "destructive" });
         }
     };
 
@@ -389,6 +444,10 @@ export default function ProfilePage() {
                                     <LogOut className="mr-2 h-4 w-4" />
                                     Logout
                                 </Button>
+                                <Button variant="link" size="sm" onClick={handleDownloadData} className="text-muted-foreground text-xs mt-2">
+                                    <Download className="mr-2 h-3 w-3" />
+                                    Download My Data
+                                </Button>
                             </CardContent>
                         </Card>
                     </div>
@@ -442,6 +501,24 @@ export default function ProfilePage() {
                                         <span className="ml-2 text-muted-foreground">Points</span>
                                     </div>
                                     <p className="text-muted-foreground mt-2 text-sm">100 points = 25 discount</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="bg-gradient-to-r from-gray-50 to-white">
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="text-base font-headline flex items-center gap-2">
+                                    <Wallet className="h-5 w-5 text-green-600" />
+                                    Wallet & Refunds
+                                </CardTitle>
+                                <Button variant="ghost" size="sm" asChild>
+                                    <Link href="/profile/wallet">View History <ChevronRight className="ml-1 h-3 w-3" /></Link>
+                                </Button>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-bold">₹0.00</span>
+                                    <span className="text-xs text-muted-foreground">Available Balance</span>
                                 </div>
                             </CardContent>
                         </Card>
@@ -516,7 +593,7 @@ export default function ProfilePage() {
                         </Card>
                     </div>
                 </div>
-            </main>
-        </div>
+            </main >
+        </div >
     );
 }

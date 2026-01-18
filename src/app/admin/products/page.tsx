@@ -71,6 +71,7 @@ import { useToast } from '@/hooks/use-toast';
 import Papa from 'papaparse';
 
 import { InventoryStats } from "@/components/admin/inventory-stats";
+import { WarehouseStockManager } from "@/components/admin/warehouse-stock-manager";
 
 const productSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
@@ -99,6 +100,11 @@ function createSlug(name: string) {
 export default function AdminProductsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product & { stock?: number } | null>(null);
+
+  // New State for Stock Manager
+  const [stockManagerProduct, setStockManagerProduct] = useState<Product | null>(null);
+  const [isStockManagerOpen, setIsStockManagerOpen] = useState(false);
+
   const { toast } = useToast();
   const firestore = useFirestore();
 
@@ -121,17 +127,25 @@ export default function AdminProductsPage() {
       images: [],
       stock: 0,
       description: '',
+      weight: '',
+      unit: 'g',
     },
   });
 
   useEffect(() => {
     if (editingProduct && isDialogOpen) {
       form.reset({
-        ...editingProduct,
-        price: editingProduct.price,
+        name: editingProduct.name || '',
+        price: editingProduct.price || 0,
+        categoryId: editingProduct.categoryId || '',
+        subcategoryId: editingProduct.subcategoryId || '',
+        status: editingProduct.status || 'Available',
+        imageUrl: editingProduct.imageUrl || '',
+        images: editingProduct.images || (editingProduct.imageUrl ? [editingProduct.imageUrl] : []),
         stock: editingProduct.stock ?? 0,
         description: editingProduct.description || `Discover the authentic taste and convenience of our ${editingProduct.name}. Perfect for a quick, healthy, and delicious meal. Made with high-quality ingredients.`,
-        images: editingProduct.images || (editingProduct.imageUrl ? [editingProduct.imageUrl] : []),
+        weight: editingProduct.weight || '',
+        unit: editingProduct.unit || 'g',
       });
     } else {
       form.reset({
@@ -144,12 +158,14 @@ export default function AdminProductsPage() {
         images: [],
         stock: 0,
         description: '',
+        weight: '',
+        unit: 'g',
       });
     }
   }, [editingProduct, isDialogOpen, form]);
 
 
-  const { user, isUserLoading } = useUser();
+  const { user, isUserLoading, userProfile } = useUser();
 
   const productsCollection = useMemoFirebase(
     () => (firestore && user ? collection(firestore, 'products') : null),
@@ -159,9 +175,14 @@ export default function AdminProductsPage() {
     () => (firestore && user ? collection(firestore, 'inventory') : null),
     [firestore, user]
   );
+  const warehousesCollection = useMemoFirebase(
+    () => (firestore && user ? collection(firestore, 'warehouses') : null),
+    [firestore, user]
+  );
 
   const { data: products, isLoading: isLoadingProducts } = useCollection<Product>(productsCollection);
   const { data: inventory, isLoading: isLoadingInventory } = useCollection<Inventory>(inventoryCollection);
+  const { data: warehouses, isLoading: isLoadingWarehouses } = useCollection<Warehouse>(warehousesCollection);
 
   const handleStockChange = (productId: string, newStock: string) => {
     const stockAsNumber = parseInt(newStock, 10);
@@ -382,10 +403,18 @@ export default function AdminProductsPage() {
       productData.imageUrl = productData.images[0];
     }
 
+    const safeProductData = {
+      ...productData,
+      slug,
+      description,
+      weight: productData.weight || null,
+      unit: productData.unit || null,
+    };
+
     if (editingProduct) {
       // Update existing product
       const productRef = doc(firestore, 'products', editingProduct.id);
-      setDocumentNonBlocking(productRef, { ...productData, slug, description }, { merge: true });
+      setDocumentNonBlocking(productRef, safeProductData, { merge: true });
 
       const inventoryRef = doc(firestore, 'inventory', editingProduct.id);
       setDocumentNonBlocking(inventoryRef, { productId: editingProduct.id, stock }, { merge: true });
@@ -397,7 +426,7 @@ export default function AdminProductsPage() {
     } else {
       // Add new product
       const newProductRef = doc(collection(firestore, 'products'));
-      setDocumentNonBlocking(newProductRef, { ...productData, slug, id: newProductRef.id, description });
+      setDocumentNonBlocking(newProductRef, { ...safeProductData, id: newProductRef.id }, { merge: true });
 
       const inventoryRef = doc(firestore, 'inventory', newProductRef.id);
       setDocumentNonBlocking(inventoryRef, { productId: newProductRef.id, stock }, { merge: true });
@@ -440,60 +469,35 @@ export default function AdminProductsPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4">
         <h1 className="text-3xl font-bold font-headline tracking-tight">Products</h1>
         <div className="flex items-center gap-2 ml-auto">
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) setEditingProduct(null);
-          }}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-1" onClick={() => handleOpenDialog(null)}>
-                <PlusCircle className="h-4 w-4" />
-                Add Product
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-xl">
-              <DialogHeader>
-                <DialogTitle>{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
-                <DialogDescription>
-                  {editingProduct ? 'Update the details for this product.' : 'Fill in the details for the new product.'}
-                </DialogDescription>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. Idli Mix" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="120" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="flex gap-4">
+          {userProfile?.role !== 'warehouse_admin' && (
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) setEditingProduct(null);
+            }}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-1" onClick={() => handleOpenDialog(null)}>
+                  <PlusCircle className="h-4 w-4" />
+                  Add Product
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-xl">
+                {/* ... Dialog Content ... */}
+                <DialogHeader>
+                  <DialogTitle>{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+                  <DialogDescription>
+                    {editingProduct ? 'Update the details for this product.' : 'Fill in the details for the new product.'}
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
                     <FormField
                       control={form.control}
-                      name="weight"
+                      name="name"
                       render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormLabel>Weight/Qty</FormLabel>
+                        <FormItem>
+                          <FormLabel>Name</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. 500" {...field} />
+                            <Input placeholder="e.g. Idli Mix" {...field} value={field.value ?? ''} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -501,130 +505,158 @@ export default function AdminProductsPage() {
                     />
                     <FormField
                       control={form.control}
-                      name="unit"
+                      name="price"
                       render={({ field }) => (
-                        <FormItem className="w-24">
-                          <FormLabel>Unit</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} defaultValue="g">
+                        <FormItem>
+                          <FormLabel>Price</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="120" {...field} value={field.value ?? 0} onChange={e => field.onChange(e.target.valueAsNumber || 0)} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex gap-4">
+                      <FormField
+                        control={form.control}
+                        name="weight"
+                        render={({ field }) => (
+                          <FormItem className="flex-1">
+                            <FormLabel>Weight/Qty</FormLabel>
+                            <FormControl>
+                              <Input placeholder="e.g. 500" {...field} value={field.value ?? ''} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="unit"
+                        render={({ field }) => (
+                          <FormItem className="w-24">
+                            <FormLabel>Unit</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value ?? 'g'} defaultValue="g">
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Unit" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="g">g</SelectItem>
+                                <SelectItem value="kg">kg</SelectItem>
+                                <SelectItem value="ml">ml</SelectItem>
+                                <SelectItem value="L">L</SelectItem>
+                                <SelectItem value="pcs">pcs</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="stock"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Initial Stock</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="50" {...field} value={field.value ?? 0} onChange={e => field.onChange(e.target.valueAsNumber || 0)} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="categoryId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Category</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Unit" />
+                                <SelectValue placeholder="Select a category" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="g">g</SelectItem>
-                              <SelectItem value="kg">kg</SelectItem>
-                              <SelectItem value="ml">ml</SelectItem>
-                              <SelectItem value="L">L</SelectItem>
-                              <SelectItem value="pcs">pcs</SelectItem>
+                              {categories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="stock"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Initial Stock</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="50" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="categoryId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Category</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                    <FormField
+                      control={form.control}
+                      name="subcategoryId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Subcategory</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a subcategory" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {subCategories.map(sub => <SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Status</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a status" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="Available">Available</SelectItem>
+                              <SelectItem value="New Arrival">New Arrival</SelectItem>
+                              <SelectItem value="Coming Soon">Coming Soon</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="images"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Product Gallery (Front, Back, etc.)</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a category" />
-                            </SelectTrigger>
+                            <MultiImageUpload
+                              value={field.value || []}
+                              onChange={field.onChange}
+                              disabled={isLoading}
+                            />
                           </FormControl>
-                          <SelectContent>
-                            {categories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="subcategoryId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Subcategory</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a subcategory" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {subCategories.map(sub => <SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a status" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Available">Available</SelectItem>
-                            <SelectItem value="New Arrival">New Arrival</SelectItem>
-                            <SelectItem value="Coming Soon">Coming Soon</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="images"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Product Gallery (Front, Back, etc.)</FormLabel>
-                        <FormControl>
-                          <MultiImageUpload
-                            value={field.value || []}
-                            onChange={field.onChange}
-                            disabled={isLoading}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <DialogFooter className="sticky bottom-0 bg-background pt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                    <Button type="submit">Save product</Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+                    <DialogFooter className="sticky bottom-0 bg-background pt-4">
+                      <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                      <Button type="submit">Save product</Button>
+                    </DialogFooter>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
       <Card className="p-4">
@@ -754,48 +786,17 @@ export default function AdminProductsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Popover open={openPopoverId === product.id} onOpenChange={(isOpen) => {
-                        if (isOpen) {
-                          setOpenPopoverId(product.id);
-                          setStockUpdates(prev => ({ ...prev, [product.id]: product.stock }));
-                        } else {
-                          setOpenPopoverId(null);
-                        }
-                      }}>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" size="sm" className="w-16 sm:w-20 justify-center h-7 text-xs">{product.stock}</Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 p-4 mr-4">
-                          <div className="grid gap-4">
-                            <div className="space-y-2">
-                              <h4 className="font-medium leading-none">Update Stock</h4>
-                              <p className="text-sm text-muted-foreground">
-                                Set new quantity for {product.name}.
-                              </p>
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor={`stock-${product.id}`} className="sr-only">Stock</Label>
-                              <div className="flex items-center gap-2">
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAdjustStock(product.id, -1)} disabled={(stockUpdates[product.id] ?? 0) <= 0}>
-                                  <Minus className="h-4 w-4" />
-                                </Button>
-                                <Input
-                                  id={`stock-${product.id}`}
-                                  type="text"
-                                  value={stockUpdates[product.id] ?? ''}
-                                  onChange={(e) => handleStockChange(product.id, e.target.value)}
-                                  className="col-span-2 h-8 text-center"
-                                  onKeyDown={(e) => e.key === 'Enter' && handleUpdateStock(product.id)}
-                                />
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleAdjustStock(product.id, 1)}>
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              <Button size="sm" onClick={() => handleUpdateStock(product.id)}>Save</Button>
-                            </div>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-20 justify-center h-7 text-xs"
+                        onClick={() => {
+                          setStockManagerProduct(product);
+                          setIsStockManagerOpen(true);
+                        }}
+                      >
+                        {product.stock}
+                      </Button>
                     </TableCell>
                     <TableCell className="sticky right-0 bg-card">
                       <DropdownMenu>
@@ -807,6 +808,12 @@ export default function AdminProductsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => {
+                            setStockManagerProduct(product);
+                            setIsStockManagerOpen(true);
+                          }}>
+                            Manage Stock (Warehouses)
+                          </DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => handleOpenDialog(productWithStock)}>Quick Edit (Modal)</DropdownMenuItem>
                           <DropdownMenuItem asChild>
                             <Link href={`/admin/product-editor?id=${product.id}`}>Full Page Edit</Link>
@@ -815,18 +822,29 @@ export default function AdminProductsPage() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
-                  </TableRow>
+                  </TableRow >
                 )
               })}
-              {!isLoading && filteredProducts.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-4">No products found matching filters.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+              {
+                !isLoading && filteredProducts.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-4">No products found matching filters.</TableCell>
+                  </TableRow>
+                )
+              }
+            </TableBody >
+          </Table >
+        </CardContent >
+      </Card >
+      {stockManagerProduct && (
+        <WarehouseStockManager
+          open={isStockManagerOpen}
+          onOpenChange={setIsStockManagerOpen}
+          product={stockManagerProduct}
+          warehouses={warehouses || []}
+          lockedWarehouseId={userProfile?.role === 'warehouse_admin' ? userProfile?.managedWarehouseId : undefined}
+        />
+      )}
+    </div >
   );
 }

@@ -5,6 +5,7 @@ import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
 import { Functions } from 'firebase/functions';
 import { Auth, User } from 'firebase/auth';
+import type { UserProfile } from '@/lib/types';
 
 // Combined state for the Firebase context
 export interface FirebaseContextState {
@@ -15,6 +16,7 @@ export interface FirebaseContextState {
     functions: Functions | null;
     // User authentication state
     user: User | null;
+    userProfile: UserProfile | null;
     isUserLoading: boolean;
     userError: Error | null;
 }
@@ -26,12 +28,14 @@ export interface FirebaseServicesAndUser {
     auth: Auth;
     functions: Functions;
     user: User | null;
+    userProfile: UserProfile | null;
     isUserLoading: boolean;
     userError: Error | null;
 }
 
 export interface UserHookResult {
     user: User | null;
+    userProfile: UserProfile | null;
     isUserLoading: boolean;
     userError: Error | null;
 }

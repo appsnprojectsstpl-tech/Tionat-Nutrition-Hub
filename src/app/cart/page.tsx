@@ -87,6 +87,61 @@ function RelatedProducts() {
 }
 
 
+import { useWarehouse } from "@/context/warehouse-context";
+import { AlertCircle, Clock, MapPin, Truck } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+function FulfillmentBanner() {
+  const { selectedWarehouse } = useWarehouse();
+  const [timeLeft, setTimeLeft] = useState<string>("");
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const now = new Date();
+      const cutoff = new Date();
+      cutoff.setHours(22, 0, 0, 0); // 10 PM
+
+      if (now > cutoff) {
+        setTimeLeft("Tomorrow");
+      } else {
+        const diff = cutoff.getTime() - now.getTime();
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        setTimeLeft(`${hours}h ${minutes}m`);
+      }
+    };
+    calculateTimeLeft();
+    const timer = setInterval(calculateTimeLeft, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  if (!selectedWarehouse) return null;
+
+  return (
+    <div className="mb-6 space-y-3">
+      <div className="bg-blue-50 border-blue-200 text-blue-900 rounded-lg p-3 flex items-start gap-3">
+        <MapPin className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-bold text-sm">Fulfilled by {selectedWarehouse.name}</p>
+          <p className="text-xs opacity-80">{selectedWarehouse.address}, {selectedWarehouse.city}</p>
+        </div>
+      </div>
+
+      {timeLeft !== "Tomorrow" ? (
+        <div className="bg-green-50 border-green-200 text-green-900 rounded-lg p-3 flex items-center gap-3">
+          <Clock className="h-5 w-5 text-green-600 shrink-0" />
+          <p className="text-sm font-medium">Order within <strong>{timeLeft}</strong> for delivery today!</p>
+        </div>
+      ) : (
+        <div className="bg-orange-50 border-orange-200 text-orange-900 rounded-lg p-3 flex items-center gap-3">
+          <Truck className="h-5 w-5 text-orange-600 shrink-0" />
+          <p className="text-sm font-medium">Orders placed now will be packed for <strong>Tomorrow Morning</strong>.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CartPage() {
   const { items, updateQuantity, removeFromCart, subtotal, clearCart, discountAmount, total } = useCart();
   const router = useRouter();
@@ -126,6 +181,7 @@ export default function CartPage() {
     <div className="min-h-screen bg-background">
       {/* AppHeader removed - using AppShell global header */}
       <main className="container mx-auto px-4 py-8">
+        <FulfillmentBanner />
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl md:text-3xl font-bold font-headline">Your Cart</h1>
           <Button variant="outline" size="sm" onClick={clearCart}>Clear Cart</Button>

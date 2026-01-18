@@ -2,7 +2,7 @@
 'use client';
 import { collection, writeBatch, doc, Firestore, serverTimestamp } from 'firebase/firestore';
 import { products } from './data';
-import { Order, UserProfile, Inventory, LoyaltyProgram } from './types';
+import { Order, UserProfile, Inventory, LoyaltyProgram, Warehouse, WarehouseInventory } from './types';
 
 function createSlug(name: string) {
   return name
@@ -33,7 +33,7 @@ export async function seedDatabase(db: Firestore) {
   products.forEach((product: any) => {
     const { ...rest } = product;
     const docRef = doc(productsCollection, product.id);
-    const categoryId = typedCategories.find(c => c.name === 'Nutritional Care')?.id; // All seeded products are in this category
+    const categoryId = typedCategories.find(c => c.name === product.category)?.id || typedCategories[0].id;
     const slug = createSlug(product.name);
     const description = `Discover the authentic taste and convenience of our ${product.name}. Perfect for a quick, healthy, and delicious meal. Made with high-quality ingredients.`;
 
@@ -123,6 +123,62 @@ export async function seedDatabase(db: Firestore) {
   };
   batch.set(doc(loyaltyCollection, 'config'), loyaltyConfig);
 
+  // Seed Warehouses
+  const warehousesCollection = collection(db, 'warehouses');
+  const warehouses: Warehouse[] = [
+    {
+      id: "wh-1",
+      name: "Tionat Indiranagar (Central)",
+      address: "123, 100 Feet Rd, Indiranagar, Bangalore",
+      city: "Bangalore",
+      serviceablePincodes: ["560008", "560038", "560001"], // Indiranagar, HAL, MG Road
+      contactNumber: "9988776655",
+      isActive: true
+    },
+    {
+      id: "wh-2",
+      name: "Tionat Koramangala (South)",
+      address: "456, 80 Feet Rd, Koramangala 4th Block, Bangalore",
+      city: "Bangalore",
+      serviceablePincodes: ["560034", "560095", "560047"], // Koramangala, HSR, Vivek Nagar
+      contactNumber: "9988776644",
+      isActive: true
+    },
+    {
+      id: "wh-3",
+      name: "Tionat Whitefield (East)",
+      address: "789, ITPL Main Rd, Whitefield, Bangalore",
+      city: "Bangalore",
+      serviceablePincodes: ["560066", "560048", "560067"], // Whitefield, Mahadevapura
+      contactNumber: "9988776633",
+      isActive: true
+    }
+  ];
+
+  warehouses.forEach(wh => {
+    batch.set(doc(warehousesCollection, wh.id), wh);
+  });
+
+  // Seed Warehouse Inventory (Distributed Stock)
+  const warehouseInventoryCollection = collection(db, 'warehouse_inventory');
+  products.forEach((product: any) => {
+    warehouses.forEach(wh => {
+      // Random stock simulation: Some stores have more, some have 0 (Out of Stock)
+      // 20% chance of being out of stock
+      const isOutOfStock = Math.random() < 0.2;
+      const stock = isOutOfStock ? 0 : Math.floor(Math.random() * 50) + 5;
+
+      const inventoryDocId = `${wh.id}_${product.id}`;
+      const invItem: WarehouseInventory = {
+        warehouseId: wh.id,
+        productId: product.id,
+        stock: stock,
+        updatedAt: serverTimestamp()
+      };
+      batch.set(doc(warehouseInventoryCollection, inventoryDocId), invItem);
+    });
+  });
+
   // Seed Metadata (Timestamp)
   const metadataCollection = collection(db, 'system_metadata');
   batch.set(doc(metadataCollection, 'seed_info'), { lastSeededAt: serverTimestamp() });
@@ -130,7 +186,7 @@ export async function seedDatabase(db: Firestore) {
 
   try {
     await batch.commit();
-    console.log('Database seeded successfully with products, categories, users, orders, inventory and loyalty config!');
+    console.log('Database seeded successfully with Warehouses, inventory, products, categories, users, orders!');
     return { success: true };
   } catch (error) {
     console.error('Error seeding database:', error);
@@ -146,21 +202,33 @@ export async function undoSeedDatabase(db: Firestore) {
   const catIds = ['cat-1', 'cat-2', 'cat-3'];
   catIds.forEach(id => batch.delete(doc(categoriesCollection, id)));
 
-  // 2. Delete Products and Inventory
+  // 2. Delete Products and Inventory (Global & Warehouse)
   const productsCollection = collection(db, 'products');
   const inventoryCollection = collection(db, 'inventory');
+  const warehouseInventoryCollection = collection(db, 'warehouse_inventory');
+  const warehouseIds = ["wh-1", "wh-2", "wh-3"];
+
   products.forEach((_, index) => {
     const id = `prod-${index + 1}`;
     batch.delete(doc(productsCollection, id));
-    batch.delete(doc(inventoryCollection, id));
+    batch.delete(doc(inventoryCollection, id)); // Legacy global inventory
+
+    // Delete Warehouse Inventory
+    warehouseIds.forEach(whId => {
+      batch.delete(doc(warehouseInventoryCollection, `${whId}_${id}`));
+    });
   });
 
-  // 3. Delete Users
+  // 3. Delete Warehouses
+  const warehousesCollection = collection(db, 'warehouses');
+  warehouseIds.forEach(id => batch.delete(doc(warehousesCollection, id)));
+
+  // 4. Delete Users
   const usersCollection = collection(db, 'users');
   const userIds = ['user-1-seeded', 'user-2-seeded'];
   userIds.forEach(id => batch.delete(doc(usersCollection, id)));
 
-  // 4. Delete Orders (Main Collection and User Subcollections)
+  // 5. Delete Orders (Main Collection and User Subcollections)
   const ordersCollection = collection(db, 'orders');
   const orderIds = ['order-1-seeded', 'order-2-seeded'];
 
@@ -179,10 +247,10 @@ export async function undoSeedDatabase(db: Firestore) {
     }
   });
 
-  // 5. Delete Loyalty Config
+  // 6. Delete Loyalty Config
   batch.delete(doc(collection(db, 'loyaltyProgram'), 'config'));
 
-  // 6. Delete Seed Metadata
+  // 7. Delete Seed Metadata
   batch.delete(doc(collection(db, 'system_metadata'), 'seed_info'));
 
   try {

@@ -21,14 +21,22 @@ import { Button } from "@/components/ui/button";
 import { DollarSign, Package, Users, ShoppingCart, ArrowUpRight } from "lucide-react";
 import { useCollection, useFirebase, useUser, useMemoFirebase } from "@/firebase";
 import { collection, query, orderBy, limit, where } from "firebase/firestore";
-import type { Order, Product, UserProfile } from "@/lib/types";
 import { format } from 'date-fns';
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AnalyticsCharts } from "@/components/admin/analytics-charts";
+import { AdminAlerts } from "@/components/admin/admin-alerts";
+import type { Order, Product, UserProfile, Warehouse } from "@/lib/types";
 
 export default function AdminDashboard() {
   const { firestore } = useFirebase();
-  const { user, isUserLoading } = useUser();
+  const { user, isUserLoading, userProfile } = useUser();
 
   const productsQuery = useMemoFirebase(
     () => (firestore && user ? collection(firestore, 'products') : null),
@@ -42,24 +50,90 @@ export default function AdminDashboard() {
   );
   const { data: customers } = useCollection<UserProfile>(customersQuery);
 
-  const allOrdersQuery = useMemoFirebase(
-    () => (firestore && user ? query(collection(firestore, 'orders'), orderBy('orderDate', 'desc')) : null),
+  const warehousesQuery = useMemoFirebase(
+    () => (firestore && user ? collection(firestore, 'warehouses') : null),
     [firestore, user]
+  );
+  const { data: warehouses, isLoading: isLoadingWarehouses } = useCollection<Warehouse>(warehousesQuery);
+
+
+  const allOrdersQuery = useMemoFirebase(
+    () => {
+      if (!firestore || !user) return null;
+
+      const baseRef = collection(firestore, 'orders');
+
+      // Filter for Warehouse Admin
+      if (userProfile?.role === 'warehouse_admin' && userProfile.managedWarehouseId) {
+        return query(
+          baseRef,
+          where('warehouseId', '==', userProfile.managedWarehouseId),
+          orderBy('orderDate', 'desc')
+        );
+      }
+
+      return query(baseRef, orderBy('orderDate', 'desc'))
+    },
+    [firestore, user, userProfile]
   );
   const { data: allOrders, isLoading: isLoadingOrders } = useCollection<Order>(allOrdersQuery);
 
   // Show loading state if auth is initializing
   if (isUserLoading) return <div className="p-8 text-center">Loading Admin Panel...</div>;
 
-  const recentOrders = useMemo(() => allOrders?.slice(0, 5) || [], [allOrders]);
+  // Dashboard filter state
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('All');
+
+  const filteredOrders = useMemo(() => {
+    if (!allOrders) return [];
+    if (selectedWarehouseId === 'All') return allOrders;
+    return allOrders.filter(o => o.warehouseId === selectedWarehouseId);
+  }, [allOrders, selectedWarehouseId]);
+
+  const recentOrders = useMemo(() => filteredOrders?.slice(0, 5) || [], [filteredOrders]);
 
   const totalRevenue = useMemo(() => {
-    return allOrders?.reduce((acc, order) => acc + order.totalAmount, 0) || 0;
-  }, [allOrders]);
+    return filteredOrders?.reduce((acc, order) => acc + order.totalAmount, 0) || 0;
+  }, [filteredOrders]);
+
+  const activeWarehouseName = useMemo(() => {
+    if (selectedWarehouseId === 'All') return 'All Warehouses';
+    return warehouses?.find(w => w.id === selectedWarehouseId)?.name || selectedWarehouseId;
+  }, [selectedWarehouseId, warehouses]);
 
   return (
     <div>
-      <h1 className="text-3xl font-bold font-headline mb-6">Dashboard</h1>
+      <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
+        <h1 className="text-3xl font-bold font-headline">Dashboard</h1>
+
+        {/* Warehouse Filter (Only for Super Admin) */}
+        {userProfile?.role !== 'warehouse_admin' && (
+          <div className="flex items-center gap-2 bg-background border rounded-md px-3 py-1 shadow-sm">
+            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">View Store:</span>
+            <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+              <SelectTrigger className="w-[180px] h-8 border-0 focus:ring-0">
+                <SelectValue placeholder="All Warehouses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All Warehouses</SelectItem>
+                {warehouses?.map(w => (
+                  <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+
+      {/* Analytic Charts Section */}
+      <div className="mb-8">
+        <AdminAlerts
+          orders={filteredOrders || []}
+          warehouses={warehouses || []}
+          isLoading={isLoadingOrders || isLoadingWarehouses}
+        />
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -69,7 +143,7 @@ export default function AdminDashboard() {
           <CardContent>
             <div className="text-2xl font-bold">{totalRevenue.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
-              Calculated from all orders
+              {selectedWarehouseId === 'All' ? 'Across all stores' : `For ${activeWarehouseName}`}
             </p>
           </CardContent>
         </Card>
@@ -94,9 +168,9 @@ export default function AdminDashboard() {
               <ShoppingCart className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{allOrders?.length ?? 0}</div>
+              <div className="text-2xl font-bold">{filteredOrders?.length ?? 0}</div>
               <p className="text-xs text-muted-foreground">
-                Processed in total
+                Processed in {selectedWarehouseId !== 'All' ? 'selected store' : 'total'}
               </p>
             </CardContent>
           </Card>
@@ -119,13 +193,13 @@ export default function AdminDashboard() {
 
       {/* Analytics Charts Section */}
       <div className="mt-8">
-        <AnalyticsCharts orders={allOrders || []} />
+        <AnalyticsCharts orders={filteredOrders || []} />
       </div>
 
       <div className="mt-8">
         <Card>
           <CardHeader>
-            <CardTitle>Recent Orders</CardTitle>
+            <CardTitle>Recent Orders ({activeWarehouseName})</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -149,7 +223,7 @@ export default function AdminDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        {order.orderDate ? format(order.orderDate.toDate(), 'MMM d, yyyy') : 'N/A'}
+                        {order.orderDate && typeof (order.orderDate as any).toDate === 'function' ? format((order.orderDate as any).toDate(), 'MMM d, yyyy') : 'N/A'}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <Badge className="text-xs" variant={order.status === 'Pending' ? 'secondary' : 'default'}>

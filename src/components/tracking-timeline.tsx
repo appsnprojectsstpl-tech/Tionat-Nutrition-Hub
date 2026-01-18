@@ -1,30 +1,33 @@
 'use client';
 
-import { Check, Package, Truck, Home, Clock } from 'lucide-react';
+import { Check, Package, Truck, Home, Clock, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface TrackingTimelineProps {
     status: 'Pending' | 'Paid' | 'Shipped' | 'Delivered' | 'Cancelled';
+    orderDate?: any; // Firestore Timestamp
 }
 
-export function TrackingTimeline({ status }: TrackingTimelineProps) {
+export function TrackingTimeline({ status, orderDate }: TrackingTimelineProps) {
     if (status === 'Cancelled') {
         return (
-            <div className="flex items-center gap-2 text-destructive bg-destructive/10 p-2 rounded-lg mt-3">
-                <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
-                <span className="text-xs font-bold">Order Cancelled</span>
+            <div className="flex flex-col items-center justify-center py-6 text-destructive bg-destructive/5 rounded-lg border border-destructive/10">
+                <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center mb-2">
+                    <CheckCircle2 className="h-6 w-6 text-destructive" />
+                </div>
+                <h3 className="font-bold text-lg">Order Cancelled</h3>
+                <p className="text-sm text-muted-foreground mt-1">This order has been cancelled.</p>
             </div>
         );
     }
 
     const steps = [
-        { label: 'Confirmed', icon: Check, status: 'Pending' },
-        { label: 'Processing', icon: Package, status: 'Paid' },
-        { label: 'Shipped', icon: Truck, status: 'Shipped' },
-        { label: 'Delivered', icon: Home, status: 'Delivered' },
+        { label: 'Order Placed', description: 'We have received your order.', icon: CheckCircle2, status: 'Pending' },
+        { label: 'Processing', description: 'We are packing your items.', icon: Package, status: 'Paid' },
+        { label: 'Out for Delivery', description: 'Your order is on the way.', icon: Truck, status: 'Shipped' },
+        { label: 'Delivered', description: 'Enjoy your healthy meal!', icon: Home, status: 'Delivered' },
     ];
 
-    // Map status to a progress index (0 to 3)
     const statusMap: Record<string, number> = {
         'Pending': 0,
         'Paid': 1,
@@ -35,43 +38,39 @@ export function TrackingTimeline({ status }: TrackingTimelineProps) {
     const currentStepIndex = statusMap[status] ?? 0;
 
     return (
-        <div className="w-full mt-4">
-            <div className="relative flex items-center justify-between">
+        <div className="space-y-6 relative ml-2">
+            <div className="absolute left-[11px] top-2 bottom-4 w-px bg-muted -z-10" />
 
-                {/* Progress Bar Background */}
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-muted rounded-full -z-10" />
+            {steps.map((step, index) => {
+                const isCompleted = index <= currentStepIndex;
+                const isCurrent = index === currentStepIndex;
 
-                {/* Active Progress Bar */}
-                <div
-                    className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-primary rounded-full -z-10 transition-all duration-500 ease-out"
-                    style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}
-                />
+                let dateDisplay = null;
+                if (index === 0 && orderDate?.toDate) {
+                    dateDisplay = orderDate.toDate().toLocaleString('en-US', {
+                        month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true
+                    });
+                }
 
-                {steps.map((step, index) => {
-                    const isCompleted = index <= currentStepIndex;
-                    const isCurrent = index === currentStepIndex;
-
-                    return (
-                        <div key={step.label} className="flex flex-col items-center gap-2">
-                            <div
-                                className={cn(
-                                    "h-8 w-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 bg-background",
-                                    isCompleted ? "border-primary bg-primary text-primary-foreground" : "border-muted text-muted-foreground",
-                                    isCurrent && "ring-4 ring-primary/20 scale-110"
-                                )}
-                            >
-                                <step.icon className="h-4 w-4" />
-                            </div>
-                            <span className={cn(
-                                "text-[10px] font-medium transition-colors duration-300",
-                                isCompleted ? "text-foreground font-bold" : "text-muted-foreground"
-                            )}>
-                                {step.label}
-                            </span>
+                return (
+                    <div key={step.label} className="flex gap-4">
+                        <div className={cn(
+                            "h-6 w-6 rounded-full flex items-center justify-center shrink-0 bg-background border-2 z-10",
+                            isCompleted ? "border-primary text-primary" : "border-muted text-muted-foreground",
+                            isCurrent && "ring-4 ring-primary/20"
+                        )}>
+                            {isCompleted ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
                         </div>
-                    );
-                })}
-            </div>
+                        <div className="pb-2">
+                            <h4 className={cn("text-sm font-semibold leading-none", isCompleted ? "text-foreground" : "text-muted-foreground")}>
+                                {step.label}
+                            </h4>
+                            <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
+                            {dateDisplay && <p className="text-[10px] text-gray-500 mt-1 font-mono">{dateDisplay}</p>}
+                        </div>
+                    </div>
+                );
+            })}
         </div>
     );
 }

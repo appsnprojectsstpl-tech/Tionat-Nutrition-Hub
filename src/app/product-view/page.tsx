@@ -16,6 +16,9 @@ import { useCart } from '@/hooks/use-cart';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 
+import { useWarehouse } from '@/context/warehouse-context';
+import { doc, getDoc } from 'firebase/firestore';
+
 function ProductViewContent() {
     const searchParams = useSearchParams();
     const slug = searchParams.get('slug');
@@ -23,8 +26,9 @@ function ProductViewContent() {
     const { addToCart } = useCart();
     const { toast } = useToast();
     const firestore = useFirestore();
+    const { selectedWarehouse } = useWarehouse();
 
-    const [product, setProduct] = useState<Product | null>(null);
+    const [product, setProduct] = useState<(Product & { stock: number }) | null>(null);
     const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [quantity, setQuantity] = useState(1);
@@ -50,7 +54,26 @@ function ProductViewContent() {
                 }
 
                 const productDoc = querySnapshot.docs[0];
-                const productData = { id: productDoc.id, ...productDoc.data() } as Product;
+                let productData = { id: productDoc.id, ...productDoc.data(), stock: 0 } as Product & { stock: number };
+
+                // --- WAREHOUSE STOCK LOGIC ---
+                if (selectedWarehouse) {
+                    try {
+                        const invDocRef = doc(firestore, 'warehouse_inventory', `${selectedWarehouse.id}_${productData.id}`);
+                        const invSnap = await getDoc(invDocRef);
+                        if (invSnap.exists()) {
+                            productData.stock = invSnap.data().stock;
+                        } else {
+                            productData.stock = 0; // Not carried in this warehouse
+                        }
+                    } catch (err) {
+                        console.error("Failed to fetch local stock", err);
+                        // Keep global stock or set to 0? Ideally 0 if error to avoid false promise.
+                        // keeping as is for now fallback.
+                    }
+                }
+                // -----------------------------
+
                 setProduct(productData);
 
                 // Fetch related
@@ -64,6 +87,7 @@ function ProductViewContent() {
                     .map((doc) => ({ id: doc.id, ...doc.data() } as Product))
                     .filter((p) => p.id !== productData.id)
                     .slice(0, 5);
+
                 setRelatedProducts(related);
             } catch (err) {
                 console.error("Error fetching product:", err);
@@ -74,10 +98,14 @@ function ProductViewContent() {
         };
 
         fetchProductData();
-    }, [firestore, slug]);
+    }, [firestore, slug, selectedWarehouse]); // Added selectedWarehouse to dependency
+
+    const [isCartAnimating, setIsCartAnimating] = useState(false);
 
     const handleAddToCart = () => {
         if (product) {
+            setIsCartAnimating(true);
+            setTimeout(() => setIsCartAnimating(false), 400);
             addToCart(product, quantity);
             toast({
                 title: "Added to cart",
@@ -85,6 +113,8 @@ function ProductViewContent() {
             });
         }
     };
+
+
 
     if (isLoading) {
         return (
@@ -175,18 +205,33 @@ function ProductViewContent() {
                     <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-md border-t border-border z-50 md:static md:bg-transparent md:border-none md:p-0">
                         <div className="flex items-center gap-4 max-w-md mx-auto md:max-w-none">
                             <div className="flex items-center gap-2 bg-secondary rounded-xl p-1">
-                                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-lg hover:bg-background shadow-sm" onClick={() => setQuantity(q => Math.max(1, q - 1))} disabled={quantity <= 1}>
+                                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-lg hover:bg-background shadow-sm" onClick={() => setQuantity(q => Math.max(1, q - 1))} disabled={quantity <= 1 || product.stock <= 0}>
                                     <Minus className="h-4 w-4" />
                                 </Button>
                                 <span className="font-bold text-lg w-8 text-center">{quantity}</span>
-                                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-lg hover:bg-background shadow-sm" onClick={() => setQuantity(q => q + 1)}>
+                                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-lg hover:bg-background shadow-sm" onClick={() => setQuantity(q => Math.min(product.stock, q + 1))} disabled={quantity >= product.stock || product.stock <= 0}>
                                     <Plus className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <Button size="lg" disabled={product.status === 'Coming Soon'} onClick={handleAddToCart} className="flex-1 rounded-xl font-bold shadow-lg shadow-primary/20 text-base">
-                                {product.status === 'Coming Soon' ? 'Coming Soon' : `Add item - ₹${(product.price * quantity).toFixed(2)}`}
+                            <Button size="lg" disabled={product.status === 'Coming Soon' || product.stock <= 0} onClick={handleAddToCart} className={cn(
+                                "flex-1 rounded-xl font-bold shadow-lg shadow-primary/20 text-base transition-all",
+                                isCartAnimating && "animate-cart-bounce",
+                                product.stock <= 0 && "bg-muted text-muted-foreground shadow-none"
+                            )}>
+                                {product.status === 'Coming Soon' ? 'Coming Soon' : product.stock <= 0 ? 'Out of Stock' : `Add item - ₹${(product.price * quantity).toFixed(2)}`}
                             </Button>
                         </div>
+                        {product.stock > 0 && product.stock < 10 && (
+                            <div className="flex items-center gap-2 mt-2 justify-center md:justify-start">
+                                <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                                <p className="text-xs text-red-600 font-bold">Hurry! Only {product.stock} left in stock.</p>
+                            </div>
+                        )}
+                        {product.stock <= 0 && selectedWarehouse && (
+                            <p className="text-xs text-muted-foreground text-center mt-2 md:text-left">
+                                Currently unavailable at <strong>{selectedWarehouse.name}</strong>.
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>

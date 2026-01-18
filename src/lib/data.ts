@@ -20,37 +20,45 @@ export const subCategories: SubCategory[] = [
   { id: 'sub-8', name: 'Nutri Based', time: ['Breakfast'] },
 ];
 
-const OPTIMIZED_IMAGES = {
-  rice: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?q=80&w=400&auto=format&fit=crop',
-  mix: 'https://images.unsplash.com/photo-1630384060421-cbcb07505674?q=80&w=400&auto=format&fit=crop',
-  dal: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?q=80&w=400&auto=format&fit=crop',
-  snack: 'https://images.unsplash.com/photo-1621939514649-28b12e81658b?q=80&w=400&auto=format&fit=crop',
-  fruit: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?q=80&w=400&auto=format&fit=crop',
+// Distinct, High-Quality Unsplash Images
+const IMAGES = {
+  rice_biryani: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?q=80&w=400&auto=format&fit=crop', // Authentic Biryani
+  rice_white: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?q=80&w=400&auto=format&fit=crop', // White Rice
+  rice_tomato: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?q=80&w=400&auto=format&fit=crop', // Tomato Rice looking dish
+  dal_yellow: 'https://images.unsplash.com/photo-1585937421612-70a008356f36?q=80&w=400&auto=format&fit=crop', // Yellow Dal
+  dal_spinach: 'https://images.unsplash.com/photo-1626505779532-332921509a25?q=80&w=400&auto=format&fit=crop', // Green/Spinach Dal
+  idly: 'https://images.unsplash.com/photo-1589301760576-415c6d9e3e38?q=80&w=400&auto=format&fit=crop', // Idly
+  dosa: 'https://images.unsplash.com/photo-1668236543090-d2f896b8417c?q=80&w=400&auto=format&fit=crop', // Dosa
+  puri: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?q=80&w=400&auto=format&fit=crop', // Puri
+  fruit_mix: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?q=80&w=400&auto=format&fit=crop', // Dried Fruits
+  snack_mix: 'https://images.unsplash.com/photo-1621939514649-28b12e81658b?q=80&w=400&auto=format&fit=crop', // Indian Snack Mix
+  millet: 'https://images.unsplash.com/photo-1664993108960-9ba1dfaa9d11?q=80&w=400&auto=format&fit=crop', // Millets
+  gongura: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?q=80&w=400&auto=format&fit=crop', // Green Leafy text (used Puri for placeholder visual variety)
 };
 
 export const products: Omit<Product, 'id' | 'categoryId' | 'slug' | 'description'>[] = [
-  { name: 'Assorted Dehydrated Fruits', price: 150, category: 'Nutritional Care', subcategoryId: 'sub-7', status: 'Available', imageUrl: OPTIMIZED_IMAGES.fruit },
-  { name: 'Biryani Rice', price: 180, category: 'Nutritional Care', subcategoryId: 'sub-4', status: 'Available', imageUrl: OPTIMIZED_IMAGES.rice },
-  { name: 'Bisi Bele Bath', price: 160, category: 'Nutritional Care', subcategoryId: 'sub-1', status: 'Available', imageUrl: OPTIMIZED_IMAGES.rice },
-  { name: 'Dal Rice', price: 100, category: 'Nutritional Care', subcategoryId: 'sub-3', status: 'Available', imageUrl: OPTIMIZED_IMAGES.dal },
-  { name: 'Dosa Mix', price: 125, category: 'Nutritional Care', subcategoryId: 'sub-2', status: 'Available', imageUrl: OPTIMIZED_IMAGES.mix },
-  { name: 'Gongura Dal', price: 100, category: 'Nutritional Care', subcategoryId: 'sub-6', status: 'Available', imageUrl: OPTIMIZED_IMAGES.dal },
-  { name: 'Gongura Rice', price: 120, category: 'Nutritional Care', subcategoryId: 'sub-3', status: 'Available', imageUrl: OPTIMIZED_IMAGES.rice },
-  { name: 'Idly Mix', price: 120, category: 'Nutritional Care', subcategoryId: 'sub-1', status: 'New Arrival', imageUrl: OPTIMIZED_IMAGES.mix },
-  { name: 'Jeera Rice', price: 95, category: 'Nutritional Care', subcategoryId: 'sub-4', status: 'Available', imageUrl: OPTIMIZED_IMAGES.rice },
-  { name: 'Mango Dal', price: 100, category: 'Nutritional Care', subcategoryId: 'sub-6', status: 'Available', imageUrl: OPTIMIZED_IMAGES.dal },
-  { name: 'Mango bar 2', price: 80, category: 'Nutritional Care', subcategoryId: 'sub-7', status: 'New Arrival', imageUrl: OPTIMIZED_IMAGES.snack },
+  { name: 'Assorted Dehydrated Fruits', price: 150, category: 'Nutritional Care', subcategoryId: 'sub-7', status: 'Available', imageUrl: IMAGES.fruit_mix },
+  { name: 'Biryani Rice', price: 180, category: 'Nutritional Care', subcategoryId: 'sub-4', status: 'Available', imageUrl: IMAGES.rice_biryani },
+  { name: 'Bisi Bele Bath', price: 160, category: 'Nutritional Care', subcategoryId: 'sub-1', status: 'Available', imageUrl: IMAGES.rice_tomato },
+  { name: 'Dal Rice', price: 100, category: 'Nutritional Care', subcategoryId: 'sub-3', status: 'Available', imageUrl: IMAGES.dal_yellow },
+  { name: 'Dosa Mix', price: 125, category: 'Nutritional Care', subcategoryId: 'sub-2', status: 'Available', imageUrl: IMAGES.dosa },
+  { name: 'Gongura Dal', price: 100, category: 'Nutritional Care', subcategoryId: 'sub-6', status: 'Available', imageUrl: IMAGES.dal_spinach },
+  { name: 'Gongura Rice', price: 120, category: 'Nutritional Care', subcategoryId: 'sub-3', status: 'Available', imageUrl: IMAGES.rice_white },
+  { name: 'Idly Mix', price: 120, category: 'Nutritional Care', subcategoryId: 'sub-1', status: 'New Arrival', imageUrl: IMAGES.idly },
+  { name: 'Jeera Rice', price: 95, category: 'Nutritional Care', subcategoryId: 'sub-4', status: 'Available', imageUrl: IMAGES.rice_white },
+  { name: 'Mango Dal', price: 100, category: 'Nutritional Care', subcategoryId: 'sub-6', status: 'Available', imageUrl: IMAGES.dal_yellow },
+  { name: 'Mango bar 2', price: 80, category: 'Nutritional Care', subcategoryId: 'sub-7', status: 'New Arrival', imageUrl: IMAGES.fruit_mix },
 
-  { name: 'Millet Rice', price: 115, category: 'Nutritional Care', subcategoryId: 'sub-3', status: 'Available', imageUrl: OPTIMIZED_IMAGES.rice },
-  { name: 'Neo salt bacl', price: 50, category: 'Health Care', subcategoryId: 'sub-1', status: 'Coming Soon', imageUrl: OPTIMIZED_IMAGES.snack },
-  { name: 'Neo Salt front', price: 50, category: 'Health Care', subcategoryId: 'sub-1', status: 'Coming Soon', imageUrl: OPTIMIZED_IMAGES.snack },
-  { name: 'poha mix pouch - 100g', price: 100, category: 'Nutritional Care', subcategoryId: 'sub-2', status: 'Available', imageUrl: OPTIMIZED_IMAGES.mix },
-  { name: 'Punugulu Mix', price: 110, category: 'Nutritional Care', subcategoryId: 'sub-5', status: 'Available', imageUrl: OPTIMIZED_IMAGES.mix },
-  { name: 'Puri Mix', price: 90, category: 'Nutritional Care', subcategoryId: 'sub-2', status: 'Available', imageUrl: OPTIMIZED_IMAGES.mix },
-  { name: 'Spinach Dal', price: 100, category: 'Nutritional Care', subcategoryId: 'sub-6', status: 'Available', imageUrl: OPTIMIZED_IMAGES.dal },
-  { name: 'Suhar', price: 100, category: 'Health Care', subcategoryId: 'sub-1', status: 'Coming Soon', imageUrl: OPTIMIZED_IMAGES.snack },
-  { name: 'Tomato Mix', price: 105, category: 'Nutritional Care', subcategoryId: 'sub-1', status: 'Available', imageUrl: OPTIMIZED_IMAGES.mix },
-  { name: 'Tomato Rice', price: 105, category: 'Nutritional Care', subcategoryId: 'sub-3', status: 'Available', imageUrl: OPTIMIZED_IMAGES.rice },
+  { name: 'Millet Rice', price: 115, category: 'Nutritional Care', subcategoryId: 'sub-3', status: 'Available', imageUrl: IMAGES.millet },
+  { name: 'Neo salt bacl', price: 50, category: 'Health Care', subcategoryId: 'sub-1', status: 'Coming Soon', imageUrl: IMAGES.snack_mix },
+  { name: 'Neo Salt front', price: 50, category: 'Health Care', subcategoryId: 'sub-1', status: 'Coming Soon', imageUrl: IMAGES.snack_mix },
+  { name: 'Poha Mix Pouch', price: 100, category: 'Nutritional Care', subcategoryId: 'sub-2', status: 'Available', imageUrl: IMAGES.snack_mix },
+  { name: 'Punugulu Mix', price: 110, category: 'Nutritional Care', subcategoryId: 'sub-5', status: 'Available', imageUrl: IMAGES.snack_mix },
+  { name: 'Puri Mix', price: 90, category: 'Nutritional Care', subcategoryId: 'sub-2', status: 'Available', imageUrl: IMAGES.puri },
+  { name: 'Spinach Dal', price: 100, category: 'Nutritional Care', subcategoryId: 'sub-6', status: 'Available', imageUrl: IMAGES.dal_spinach },
+  { name: 'Suhar', price: 100, category: 'Health Care', subcategoryId: 'sub-1', status: 'Coming Soon', imageUrl: IMAGES.snack_mix },
+  { name: 'Tomato Mix', price: 105, category: 'Nutritional Care', subcategoryId: 'sub-1', status: 'Available', imageUrl: IMAGES.rice_tomato },
+  { name: 'Tomato Rice', price: 105, category: 'Nutritional Care', subcategoryId: 'sub-3', status: 'Available', imageUrl: IMAGES.rice_tomato },
 ].map((p, i) => ({ ...p, id: `prod-${i + 1}` }));
 
 

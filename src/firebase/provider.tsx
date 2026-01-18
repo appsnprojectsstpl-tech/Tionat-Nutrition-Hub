@@ -2,10 +2,11 @@
 
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
-import { Firestore } from 'firebase/firestore';
+import { Firestore, doc, onSnapshot } from 'firebase/firestore';
 import { Functions } from 'firebase/functions';
 import { Auth, User, onAuthStateChanged } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
+import type { UserProfile } from '@/lib/types';
 
 // Re-export types from context for backward compatibility if needed, 
 // but best to just rely on the hook return types.
@@ -33,10 +34,12 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
 }) => {
   const [userAuthState, setUserAuthState] = useState<{
     user: User | null;
+    userProfile: UserProfile | null;
     isUserLoading: boolean;
     userError: Error | null;
   }>({
     user: null,
+    userProfile: null,
     isUserLoading: true,
     userError: null,
   });
@@ -47,11 +50,31 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(
+    const unsubscribeAuth = onAuthStateChanged(
       auth,
       (user) => {
+        if (user) {
+          // User is signed in, fetch profile
+          // We set user state immediately, but keep loading true if we want to wait for profile?
+          // Actually, better to show UI with user info ASAP.
+          // Let's set loading false for auth, but we might want a separate profile loading state?
+          // For now, simpler:
+
+          // Subscribe to profile
+          // This structure with inner subscription needs care.
+          // But we can't easily return it from here.
+          // For stability in this rapid fix, I will just set user and let the profile update async.
+          // But if I want `unsubscribeAuth` to clean up `unsubscribeProfile`, I need to store it.
+          // Since this useEffect runs once (deps=[auth]), it's tricky.
+
+          // SIMPLER APPROACH: use separate useEffect for profile.
+          setUserAuthState(prev => ({ ...prev, user, isUserLoading: false })); // Set User first
+          return;
+        }
+
         setUserAuthState({
-          user,
+          user: null,
+          userProfile: null,
           isUserLoading: false,
           userError: null,
         });
@@ -59,14 +82,40 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       (error) => {
         setUserAuthState({
           user: null,
+          userProfile: null,
           isUserLoading: false,
           userError: error,
         });
       }
     );
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, [auth]);
+
+  // Secondary effect for Profile
+  useEffect(() => {
+    if (userAuthState.user && firestore) {
+      const profileRef = doc(firestore, 'users', userAuthState.user.uid);
+      const unsub = onSnapshot(profileRef, (snap) => {
+        if (snap.exists()) {
+          setUserAuthState(prev => ({ ...prev, userProfile: snap.data() as UserProfile }));
+        } else {
+          // Profile doesn't exist yet (maybe being created)
+          setUserAuthState(prev => ({ ...prev, userProfile: null }));
+        }
+      }, (error) => {
+        console.error("Error fetching user profile", error);
+        // Keep user, but error on profile?
+        // For now, just log and keep existing profile state or set to null
+        setUserAuthState(prev => ({ ...prev, userProfile: null }));
+      });
+      return () => unsub();
+    } else {
+      // Clear profile if no user
+      setUserAuthState(prev => ({ ...prev, userProfile: null }));
+    }
+  }, [userAuthState.user, firestore]);
+
 
   // Memoize the context value
   const contextValue = useMemo((): FirebaseContextState => {
@@ -78,6 +127,7 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       auth: servicesAvailable ? auth : null,
       functions: servicesAvailable ? functions : null,
       user: userAuthState.user,
+      userProfile: userAuthState.userProfile,
       isUserLoading: userAuthState.isUserLoading,
       userError: userAuthState.userError,
     };
@@ -102,6 +152,7 @@ export const useFirebase = (): FirebaseServicesAndUser => {
       auth: null as any,
       functions: null as any,
       user: null,
+      userProfile: null,
       isUserLoading: true,
       userError: null
     };
@@ -121,6 +172,7 @@ export const useFirebase = (): FirebaseServicesAndUser => {
     auth: context.auth,
     functions: context.functions,
     user: context.user,
+    userProfile: context.userProfile,
     isUserLoading: context.isUserLoading,
     userError: context.userError,
   };
@@ -133,8 +185,8 @@ export const useFunctions = (): Functions => {
 
 /** Hook to access Firebase Auth instance and user state. */
 export const useAuth = (): FirebaseServicesAndUser => {
-  const { auth, user, isUserLoading, userError } = useFirebase();
-  return { ...useFirebase(), auth, user, isUserLoading, userError };
+  const { auth, user, userProfile, isUserLoading, userError } = useFirebase();
+  return { ...useFirebase(), auth, user, userProfile, isUserLoading, userError };
 };
 
 /** Hook to access Firestore instance. */
@@ -166,6 +218,6 @@ export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T | 
  * @returns {UserHookResult} Object with user, isUserLoading, userError.
  */
 export const useUser = (): UserHookResult => {
-  const { user, isUserLoading, userError } = useFirebase();
-  return { user, isUserLoading, userError };
+  const { user, userProfile, isUserLoading, userError } = useFirebase();
+  return { user, userProfile, isUserLoading, userError };
 };

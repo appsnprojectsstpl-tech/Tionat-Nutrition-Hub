@@ -12,6 +12,8 @@ import {
     Database,
     Upload,
     TicketPercent,
+    Store,
+    Boxes,
 } from "lucide-react"
 import {
     Tooltip,
@@ -27,6 +29,8 @@ import { useIsMobile } from "@/hooks/use-mobile"
 const adminNavLinks = [
     { href: "/", icon: Home, label: "Home" },
     { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
+    { href: "/admin/warehouses", icon: Store, label: "Warehouses" },
+    { href: "/admin/inventory", icon: Boxes, label: "Inventory" },
     { href: "/admin/products", icon: Package, label: "Products" },
     { href: "/admin/orders", icon: ShoppingBag, label: "Orders" },
     { href: "/admin/users", icon: Users, label: "Users" },
@@ -36,24 +40,45 @@ const adminNavLinks = [
     { href: "/admin/seed", icon: Database, label: "Seed Data" },
 ]
 
+import { useUser } from "@/firebase";
+
 export function AdminSidebar() {
     const pathname = usePathname();
     const isMobile = useIsMobile();
+    const { userProfile } = useUser();
 
-    const mobileLinks = [
+    // Define restricted links for Warehouse Admin
+    // They can only see: Dashboard, Products, Orders
+    // We can filter the main list.
+    const allowedForWarehouse = ['Dashboard', 'Inventory', 'Orders', 'Home'];
+
+    const filteredNavLinks = adminNavLinks.filter(link => {
+        if (userProfile?.role === 'warehouse_admin') {
+            return allowedForWarehouse.includes(link.label);
+        }
+        return true; // Superadmin sees all
+    });
+
+    const filteredMobileLinks = [
         { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-        { href: "/admin/products", icon: Package, label: "Products" },
+        { href: "/admin/inventory", icon: Boxes, label: "Inventory" },
         { href: "/admin/orders", icon: ShoppingBag, label: "Orders" },
         { href: "/admin/coupons", icon: TicketPercent, label: "Coupons" },
         { href: "/admin/users", icon: Users, label: "Customers" },
         { href: "/", icon: Home, label: "Home" },
-    ]
+    ].filter(link => {
+        if (userProfile?.role === 'warehouse_admin') {
+            return allowedForWarehouse.includes(link.label);
+        }
+        return true;
+    });
+
 
     if (isMobile) {
         return (
             <div className="fixed bottom-0 left-0 z-50 w-full h-16 bg-background border-t">
                 <div className="grid h-full max-w-lg grid-cols-5 mx-auto font-medium">
-                    {mobileLinks.map(link => {
+                    {filteredMobileLinks.map(link => {
                         const isActive = pathname === link.href;
                         return (
                             <Link
@@ -78,7 +103,7 @@ export function AdminSidebar() {
             <TooltipProvider>
                 <nav className="flex flex-col items-center gap-4 px-2 sm:py-5">
 
-                    {adminNavLinks.map(link => {
+                    {filteredNavLinks.map(link => {
                         const isActive = pathname === link.href;
                         return (
                             <Tooltip key={link.label}>

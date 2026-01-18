@@ -4,6 +4,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from '@/firebase';
 import { CartProvider } from '@/hooks/use-cart';
 import { AddressProvider } from '@/providers/address-provider';
+import { WarehouseProvider } from '@/context/warehouse-context';
+import { PincodeGuard } from '@/components/pincode-guard';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -58,6 +60,7 @@ export const metadata: Metadata = {
 import { ThemeProvider } from "@/components/theme-provider";
 import { UpdateChecker } from "@/components/update-checker";
 import { NotificationHandler } from "@/components/notification-handler";
+import { ChatWidget } from "@/components/chat-widget";
 
 import { Outfit } from 'next/font/google';
 
@@ -92,9 +95,13 @@ export default function RootLayout({
           <FirebaseClientProvider>
             <AddressProvider>
               <CartProvider>
-                <AppShell>
-                  {children}
-                </AppShell>
+                <WarehouseProvider>
+                  <PincodeGuard />
+                  <AppShell>
+                    {children}
+                  </AppShell>
+                  <ChatWidget />
+                </WarehouseProvider>
               </CartProvider>
             </AddressProvider>
           </FirebaseClientProvider>

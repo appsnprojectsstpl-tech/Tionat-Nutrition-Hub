@@ -28,10 +28,14 @@ export function ProductCard({ product }: ProductCardProps) {
 
   const cartItem = items.find(item => item.product.id === product.id);
   const isWishlisted = isInWishlist(product.id);
+  const [isLikedAnimating, setIsLikedAnimating] = useState(false);
+  const [isCartAnimating, setIsCartAnimating] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
+    setIsCartAnimating(true);
+    setTimeout(() => setIsCartAnimating(false), 400); // Reset after animation
     addToCart(product);
     toast({
       title: "Added",
@@ -50,6 +54,8 @@ export function ProductCard({ product }: ProductCardProps) {
   const handleWishlistToggle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsLikedAnimating(true);
+    setTimeout(() => setIsLikedAnimating(false), 300);
     toggleWishlist(product);
   }
 
@@ -68,7 +74,8 @@ export function ProductCard({ product }: ProductCardProps) {
             onClick={handleWishlistToggle}
             className={cn(
               "p-2 rounded-full backdrop-blur-md transition-all active:scale-90 shadow-sm",
-              isWishlisted ? "bg-red-50 text-red-500" : "bg-white/30 text-foreground hover:bg-white/50"
+              isWishlisted ? "bg-red-50 text-red-500" : "bg-white/30 text-foreground hover:bg-white/50",
+              isLikedAnimating && "animate-like-bounce"
             )}
           >
             <Heart className={cn("h-4 w-4", isWishlisted && "fill-current")} />
@@ -137,7 +144,10 @@ export function ProductCard({ product }: ProductCardProps) {
           ) : !cartItem ? (
             <Button
               onClick={handleAddToCart}
-              className="w-full rounded-xl h-9 font-bold bg-white text-primary border-2 border-primary/10 hover:bg-primary hover:text-white shadow-sm hover:shadow-primary/25 transition-all text-xs uppercase tracking-wide active:scale-95"
+              className={cn(
+                "w-full rounded-xl h-9 font-bold bg-white text-primary border-2 border-primary/10 hover:bg-primary hover:text-white shadow-sm hover:shadow-primary/25 transition-all text-xs uppercase tracking-wide active:scale-95",
+                isCartAnimating && "animate-cart-bounce"
+              )}
             >
               Add
             </Button>

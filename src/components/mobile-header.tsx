@@ -6,6 +6,7 @@ import { AddressDialog } from './address-dialog';
 import { useAddress } from '@/providers/address-provider';
 import { NotificationsSheet } from './notifications-sheet';
 import { SearchInput } from './search-input';
+import { ModeToggle } from './mode-toggle';
 
 export function MobileHeader() {
     const { currentAddress } = useAddress();
@@ -25,6 +26,7 @@ export function MobileHeader() {
                     </Link>
 
                     <div className="flex items-center gap-2">
+                        <ModeToggle />
                         <NotificationsSheet />
 
                         <AddressDialog>

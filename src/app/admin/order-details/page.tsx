@@ -32,10 +32,31 @@ function OrderDetailsContent() {
     const { data: order, isLoading } = useDoc<Order>(orderRef);
 
     const handleStatusUpdate = async (newStatus: Order['status']) => {
-        if (!functions || !id) return;
+        if (!firestore || !id || !user) return;
         try {
-            const updateFn = httpsCallable(functions, 'updateOrderStatus');
-            await updateFn({ orderId: id, status: newStatus });
+            // Updated to use Client-Side Logic directly (Serverless)
+            const orderDocRef = doc(firestore, 'orders', id);
+
+            await (await import('firebase/firestore')).updateDoc(orderDocRef, {
+                status: newStatus,
+                updatedAt: (await import('firebase/firestore')).serverTimestamp(),
+                timeline: (await import('firebase/firestore')).arrayUnion({
+                    state: newStatus,
+                    timestamp: new Date(),
+                    actor: 'admin',
+                    metadata: { adminId: user.uid }
+                })
+            });
+
+            // If user ID exists, update user's copy too
+            if (order?.userId) {
+                const userOrderRef = doc(firestore, 'users', order.userId, 'orders', id);
+                await (await import('firebase/firestore')).updateDoc(userOrderRef, {
+                    status: newStatus,
+                    updatedAt: (await import('firebase/firestore')).serverTimestamp(),
+                }).catch(e => console.warn("Could not sync to user subcollection", e));
+            }
+
             toast({ title: "Status Updated", description: `Order marked as ${newStatus}` });
         } catch (error: any) {
             console.error("Update failed", error);

@@ -33,6 +33,9 @@ function ProductEditContent() {
     // Local form state
     const [name, setName] = useState('');
     const [price, setPrice] = useState('');
+    const [weight, setWeight] = useState('');
+    const [unit, setUnit] = useState('');
+    const [status, setStatus] = useState('Available');
 
     // Inventory adjustment state
     const [adjustValue, setAdjustValue] = useState('');
@@ -52,8 +55,11 @@ function ProductEditContent() {
                 if (pSnap.exists()) {
                     const pData = pSnap.data();
                     setProduct(pData);
-                    setName(pData.name);
+                    setName(pData.name || '');
                     setPrice(pData.price?.toString() || '0');
+                    setWeight(pData.weight || '');
+                    setUnit(pData.unit || '');
+                    setStatus(pData.status || 'Available');
                 }
 
                 // Fetch Inventory
@@ -81,31 +87,46 @@ function ProductEditContent() {
         try {
             await updateDoc(doc(firestore, 'products', id), {
                 name,
-                price: parseFloat(price)
+                price: parseFloat(price) || 0,
+                weight: weight || null, // Ensure null, not undefined
+                unit: unit || null,     // Ensure null, not undefined
+                status
             });
             toast({ title: "Product Updated" });
         } catch (e: any) {
+            console.error(e);
             toast({ title: "Error", description: e.message, variant: "destructive" });
         }
     };
 
     const handleAdjustStock = async (type: 'set' | 'increment' | 'decrement') => {
-        if (!functions || !adjustValue || !id) return;
+        if (!firestore || !adjustValue || !id) return;
         const val = parseInt(adjustValue);
         if (isNaN(val)) return;
 
         try {
-            const adjustFn = httpsCallable(functions, 'adjustInventory');
-            await adjustFn({
-                productId: id,
-                change: val,
-                type
+            await (await import('firebase/firestore')).runTransaction(firestore, async (transaction) => {
+                const invRef = doc(firestore, 'inventory', id);
+                const docSnap = await transaction.get(invRef);
+
+                let newStock = 0;
+                if (!docSnap.exists()) {
+                    if (type === 'set') newStock = val;
+                    else if (type === 'increment') newStock = val;
+                } else {
+                    const current = docSnap.data().stock || 0;
+                    if (type === 'set') newStock = val;
+                    else if (type === 'increment') newStock = current + val;
+                    else if (type === 'decrement') newStock = Math.max(0, current - val);
+                }
+
+                transaction.set(invRef, { productId: id, stock: newStock }, { merge: true });
             });
 
             toast({ title: "Stock Updated" });
             setAdjustValue('');
             // Refresh stock
-            const iSnap = await (await import('firebase/firestore')).getDoc(doc(firestore!, 'inventory', id));
+            const iSnap = await (await import('firebase/firestore')).getDoc(doc(firestore, 'inventory', id));
             if (iSnap.exists()) {
                 setStock(iSnap.data().stock || 0);
             }
@@ -135,9 +156,39 @@ function ProductEditContent() {
                             <Label>Product Name</Label>
                             <Input value={name} onChange={e => setName(e.target.value)} />
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Price (₹)</Label>
+                                <Input type="number" value={price} onChange={e => setPrice(e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Weight</Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        placeholder="e.g. 500"
+                                        value={weight}
+                                        onChange={e => setWeight(e.target.value)}
+                                    />
+                                    <Input
+                                        placeholder="Unit (g/kg)"
+                                        className="w-20"
+                                        value={unit}
+                                        onChange={e => setUnit(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
                         <div className="space-y-2">
-                            <Label>Price (₹)</Label>
-                            <Input type="number" value={price} onChange={e => setPrice(e.target.value)} />
+                            <Label>Status</Label>
+                            <select
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                value={status}
+                                onChange={e => setStatus(e.target.value)}
+                            >
+                                <option value="Available">Available</option>
+                                <option value="Coming Soon">Coming Soon</option>
+                                <option value="New Arrival">New Arrival</option>
+                            </select>
                         </div>
                         <Button onClick={handleSaveDetails} className="w-full">
                             <Save className="mr-2 h-4 w-4" /> Save Details

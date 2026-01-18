@@ -42,6 +42,7 @@ import { Badge } from '@/components/ui/badge';
 import { subCategories, categories as allCategories } from '@/lib/data';
 import { Product, Category, Order, UserProfile } from '@/lib/types';
 import { ProductCard } from '@/components/product-card';
+import { ProductCardSkeleton } from '@/components/product-card-skeleton';
 import { AppHeader } from '@/components/header';
 import { AddressDialog } from '@/components/address-dialog';
 import { cn } from '@/lib/utils';
@@ -62,7 +63,8 @@ import { useCart } from '@/hooks/use-cart';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
-import { StoryHighlights } from '@/components/story-highlights';
+import { useWarehouseProducts } from '@/hooks/use-warehouse-products';
+
 
 
 const categoryIcons = {
@@ -118,36 +120,21 @@ export default function Home() {
     }
 
 
-    const productsQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
+    // Fetched via hook now
+    const { products, isLoading: isLoadingProducts } = useWarehouseProducts(searchQuery, activeCategory);
 
-        let q = query(collection(firestore, 'products'));
-
-        if (activeCategory !== 'All') {
-            const subCategory = subCategories.find(sc => sc.name === activeCategory);
-            if (subCategory) {
-                q = query(q, where('subcategoryId', '==', subCategory.id));
-            } else if (activeCategory === 'Ready to Cook') {
-                q = query(q, where('subcategoryId', '==', 'sub-1'));
-            }
-        }
-
-        q = query(q, limit(20));
-
-        return q;
-    }, [firestore, activeCategory]);
-
+    // Featured products might still want to be global or local? 
+    // For now, let's leave featured query as is, but we might want to update it later.
+    // However, the carousel just links to product details.
     const featuredQuery = useMemoFirebase(() => {
         if (!firestore) return null;
         return query(collection(firestore, 'products'), where('isFeatured', '==', true), limit(5));
     }, [firestore]);
 
-    const { data: rawProducts, isLoading: isLoadingProducts } = useCollection<Product>(productsQuery);
     const { data: featuredProducts } = useCollection<Product>(featuredQuery);
 
-    const products = useMemo(() => rawProducts?.filter(product =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase())
-    ), [rawProducts, searchQuery]);
+    // Removed manual useMemo filtering as the hook handles it
+
 
     return (
         <div className="flex flex-col min-h-screen bg-background">
@@ -160,7 +147,7 @@ export default function Home() {
                 {/* Search moved to Global Header */}
 
                 {/* Search moved to Global Header */}
-                <StoryHighlights />
+                {/* Search moved to Global Header */}
 
                 {/* Hero Carousel */}
                 <div className="mt-4 px-4 overflow-hidden">
@@ -309,15 +296,20 @@ export default function Home() {
                 </div>
 
                 <section className="px-4 pb-4">
-                    <h2 className="font-headline text-xl font-bold mb-4 flex items-center gap-2">
-                        {activeCategory === 'All' ? 'Best Sellers' : activeCategory}
-                        <Link href="/categories" className="text-xs font-normal text-primary ml-auto hover:underline">View All</Link>
-                    </h2>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="font-headline text-xl font-bold flex items-center gap-2">
+                            {activeCategory === 'All' ? 'Best Sellers' : activeCategory}
+                            <Badge variant="secondary" className="ml-2 text-xs">
+                                {products?.length || 0} Items
+                            </Badge>
+                        </h2>
+                        <Link href="/categories" className="text-xs font-normal text-primary hover:underline">View All</Link>
+                    </div>
 
                     {isLoadingProducts && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {[1, 2, 3, 4].map(i => (
-                                <div key={i} className="aspect-[4/5] rounded-3xl bg-secondary/30 animate-pulse" />
+                        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
+                                <ProductCardSkeleton key={i} />
                             ))}
                         </div>
                     )}

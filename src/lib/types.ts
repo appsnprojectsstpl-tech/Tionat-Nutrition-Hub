@@ -38,6 +38,28 @@ export type Inventory = {
   stock: number;
 }
 
+export type Warehouse = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  serviceablePincodes: string[];
+  contactNumber: string;
+  isActive: boolean;
+  openingTime?: string; // HH:mm format
+  closingTime?: string; // HH:mm format
+  ledgerBalance?: number; // Current amount owed to the warehouse
+  invoicePrefix?: string; // e.g. "BLR"
+  currentInvoiceSequence?: number; // e.g. 100
+};
+
+export type WarehouseInventory = {
+  warehouseId: string;
+  productId: string;
+  stock: number;
+  updatedAt: Timestamp | FieldValue;
+};
+
 export type UserProfile = {
   id: string;
   firstName: string;
@@ -48,7 +70,8 @@ export type UserProfile = {
   avatarUrl?: string;
   loyaltyTier?: 'Bronze' | 'Silver' | 'Gold';
   loyaltyPoints?: number;
-  role?: 'superadmin' | 'admin' | 'user';
+  role?: 'superadmin' | 'warehouse_admin' | 'admin' | 'user';
+  managedWarehouseId?: string; // For warehouse admins
   wishlist?: string[]; // Array of Product IDs
 }
 
@@ -60,8 +83,7 @@ export type RewardHistory = {
   type: 'earned' | 'redeemed';
 };
 
-quantity: number;
-};
+
 
 
 export type OrderItem = {
@@ -89,7 +111,9 @@ export type Order = {
   paymentMethod?: 'COD' | 'RAZORPAY';
   paymentId?: string;
   discountApplied?: number;
-  couponCode?: string;
+  couponCode?: string | null;
+  warehouseId?: string; // New field for Franchise Model
+  invoiceNumber?: string; // Unique Invoice ID (e.g. BLR-2024-001)
   finalAmount?: number;
 };
 
@@ -124,5 +148,45 @@ export type Review = {
   comment: string;
   date: Timestamp | FieldValue;
   productId: string;
+};
+
+export type StockAdjustmentReason = 'RESTOCK' | 'CORRECTION' | 'DAMAGE' | 'SHRINKAGE' | 'OTHER';
+
+export type InventoryLog = {
+  id: string;
+  warehouseId: string;
+  productId: string;
+  productName: string;
+  oldStock: number;
+  newStock: number;
+  change: number;
+  reason: StockAdjustmentReason;
+  note?: string;
+  userId: string;
+  userName: string;
+  timestamp: Timestamp | FieldValue;
+};
+
+export interface LedgerEntry {
+  id: string;
+  transactionId: string; // Order ID or Payout ID
+  warehouseId: string;
+  type: 'CREDIT' | 'DEBIT';
+  category: 'SALE' | 'COMMISSION' | 'REFUND' | 'PAYOUT';
+  amount: number;
+  balanceBefore: number; // Snapshot of balance at that time
+  balanceAfter: number;
+  description: string;
+  timestamp: Timestamp | FieldValue;
+}
+
+export type WalletTransaction = {
+  id: string;
+  userId: string;
+  amount: number; // Positive for Credit, Negative for Debit
+  type: 'REFUND' | 'DEPOSIT' | 'PURCHASE' | 'CASHBACK';
+  description: string;
+  timestamp: Timestamp | FieldValue;
+  orderId?: string;
 };
 

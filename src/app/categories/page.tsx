@@ -12,6 +12,7 @@ import type { Product } from '@/lib/types';
 import { ProductCard } from '@/components/product-card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ProductCardSkeleton } from '@/components/product-card-skeleton';
 
 export default function CategoriesPage() {
     const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -64,9 +65,9 @@ export default function CategoriesPage() {
 
                 {/* Products Grid */}
                 {isLoading ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {[1, 2, 3, 4, 5, 6].map(i => (
-                            <Skeleton key={i} className="aspect-[4/5] rounded-3xl" />
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                            <ProductCardSkeleton key={i} />
                         ))}
                     </div>
                 ) : (
