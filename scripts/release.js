@@ -10,8 +10,13 @@ const run = (cmd, cwd) => {
 };
 
 try {
+    // 0. Bump Version
+    console.log('\n🔢 Step 0: Bumping Version...');
+    run('npm run bump');
+    const newVersion = require('../package.json').version;
+
     // 1. Build Web Assets
-    console.log('\n📦 Step 1: Building Web Assets (Static Export)...');
+    console.log(`\n📦 Step 1: Building Web Assets (v${newVersion})...`);
     run('npm run export');
 
     // 2. Sync Capacitor
@@ -27,14 +32,23 @@ try {
         run('./gradlew assembleRelease', androidDir);
     }
 
-    console.log('\n✅ Build Complete!');
-    console.log('APK Location: android/app/build/outputs/apk/release/app-release.apk');
+    // 4. Archive APK
+    console.log('\n📂 Step 4: Archiving APK...');
+    const apkSource = path.join(process.cwd(), 'android/app/build/outputs/apk/release/app-release.apk');
+    const releasesDir = path.join(process.cwd(), 'releases');
+    if (!fs.existsSync(releasesDir)) fs.mkdirSync(releasesDir);
 
-    // Optional: Git Push
-    console.log('\n🚀 Step 4: Pushing to GitHub...');
+    const apkDest = path.join(releasesDir, `tionat-v${newVersion}.apk`);
+    fs.copyFileSync(apkSource, apkDest);
+    console.log(`APK archived to: ${apkDest}`);
+
+    console.log('\n✅ Build Complete!');
+
+    // 5. Git Push (with APK)
+    console.log('\n🚀 Step 5: Pushing to GitHub...');
     try {
         run('git add .');
-        run('git commit -m "Automated Release Build: v' + require('../package.json').version + '"');
+        run(`git commit -m "Release v${newVersion}: Auto-generated APK"`);
         run('git push origin main');
     } catch (e) {
         console.warn('Git push failed or nothing to commit. Continuing...');
