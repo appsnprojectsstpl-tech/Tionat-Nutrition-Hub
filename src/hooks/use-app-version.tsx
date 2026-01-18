@@ -23,7 +23,7 @@ interface UpdateStatus {
     isLoading: boolean;
 }
 
-const APP_VERSION = '1.0.14'; // From package.json
+const APP_VERSION = '1.0.15'; // From package.json
 
 export function useAppVersion(): UpdateStatus {
     const firestore = useFirestore();

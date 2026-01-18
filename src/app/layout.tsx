@@ -6,6 +6,7 @@ import { CartProvider } from '@/hooks/use-cart';
 import { AddressProvider } from '@/providers/address-provider';
 import { WarehouseProvider } from '@/context/warehouse-context';
 import { PincodeGuard } from '@/components/pincode-guard';
+import { GlobalErrorGuard } from '@/components/global-error-guard';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -96,13 +97,14 @@ export default function RootLayout({
             <AddressProvider>
               <CartProvider>
                 <WarehouseProvider>
-                  <PincodeGuard />
-                  <MaintenanceGuard>
-                    <AppShell>
-                      {children}
-                    </AppShell>
-                  </MaintenanceGuard>
-
+                  <GlobalErrorGuard>
+                    <PincodeGuard />
+                    <MaintenanceGuard>
+                      <AppShell>
+                        {children}
+                      </AppShell>
+                    </MaintenanceGuard>
+                  </GlobalErrorGuard>
                 </WarehouseProvider>
               </CartProvider>
             </AddressProvider>
