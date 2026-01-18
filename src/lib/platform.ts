@@ -6,7 +6,7 @@ export const isMobileApp = (): boolean => {
     if (typeof window === 'undefined') return false;
 
     // Check if Capacitor is available
-    return !!(window as any).Capacitor;
+    return !!(window as Window & { Capacitor?: unknown }).Capacitor;
 };
 
 export const isWebApp = (): boolean => {

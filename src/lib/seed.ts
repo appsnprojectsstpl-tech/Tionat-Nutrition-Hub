@@ -30,19 +30,21 @@ export async function seedDatabase(db: Firestore) {
   // Seed Products and Inventory
   const productsCollection = collection(db, 'products');
   const inventoryCollection = collection(db, 'inventory');
-  products.forEach((product: any) => {
+  products.forEach((product) => {
     const { ...rest } = product;
-    const docRef = doc(productsCollection, product.id);
-    const categoryId = typedCategories.find(c => c.name === product.category)?.id || typedCategories[0].id;
+    const productId = (product as typeof product & { id: string }).id;
+    const productCategory = (product as typeof product & { category: string }).category;
+    const docRef = doc(productsCollection, productId);
+    const categoryId = typedCategories.find(c => c.name === productCategory)?.id || typedCategories[0].id;
     const slug = createSlug(product.name);
     const description = `Discover the authentic taste and convenience of our ${product.name}. Perfect for a quick, healthy, and delicious meal. Made with high-quality ingredients.`;
 
     batch.set(docRef, { ...rest, categoryId, slug, description });
 
     // Seed inventory for each product
-    const inventoryRef = doc(inventoryCollection, product.id);
+    const inventoryRef = doc(inventoryCollection, productId);
     const stock: Inventory = {
-      productId: product.id!, // Force TS to accept id since it's added by map in data.ts
+      productId: productId,
       stock: Math.floor(Math.random() * 91) + 10,
     };
     batch.set(inventoryRef, stock);
@@ -88,7 +90,7 @@ export async function seedDatabase(db: Firestore) {
       { productId: 'prod-1', name: 'Idli Mix', price: 120, quantity: 1 },
       { productId: 'prod-2', name: 'Vada Mix', price: 130, quantity: 1 }
     ],
-    paymentMethod: 'Cash on Delivery'
+    paymentMethod: 'COD'
   };
   const order2: Order = {
     id: 'order-2-seeded',
@@ -101,7 +103,7 @@ export async function seedDatabase(db: Firestore) {
       { productId: 'prod-3', name: 'Chole Mix', price: 150, quantity: 1 },
       { productId: 'prod-5', name: 'Sambar Mix', price: 140, quantity: 1 }
     ],
-    paymentMethod: 'Cash on Delivery'
+    paymentMethod: 'COD'
   };
 
   // Set order in both collections
@@ -161,17 +163,17 @@ export async function seedDatabase(db: Firestore) {
 
   // Seed Warehouse Inventory (Distributed Stock)
   const warehouseInventoryCollection = collection(db, 'warehouse_inventory');
-  products.forEach((product: any) => {
+  products.forEach((product) => {
     warehouses.forEach(wh => {
       // Random stock simulation: Some stores have more, some have 0 (Out of Stock)
       // 20% chance of being out of stock
       const isOutOfStock = Math.random() < 0.2;
       const stock = isOutOfStock ? 0 : Math.floor(Math.random() * 50) + 5;
 
-      const inventoryDocId = `${wh.id}_${product.id}`;
+      const inventoryDocId = `${wh.id}_${(product as typeof product & { id: string }).id}`;
       const invItem: WarehouseInventory = {
         warehouseId: wh.id,
-        productId: product.id,
+        productId: (product as typeof product & { id: string }).id,
         stock: stock,
         updatedAt: serverTimestamp()
       };

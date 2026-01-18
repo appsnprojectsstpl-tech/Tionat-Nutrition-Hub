@@ -136,8 +136,8 @@ export default function ReferralPage() {
             toast({ title: "Success!", description: "You earned 50 points!" });
             setClaimCode('');
             // Profile update might take a moment to reflect in UI hooks
-        } catch (e: any) {
-            toast({ title: "Claim Failed", description: e.message, variant: "destructive" });
+        } catch (e) {
+            toast({ title: "Claim Failed", description: e instanceof Error ? e.message : 'Claim failed', variant: "destructive" });
         } finally {
             setIsClaiming(false);
         }

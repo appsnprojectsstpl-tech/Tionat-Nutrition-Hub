@@ -1,4 +1,3 @@
-import { db } from '@/firebase'; // Assuming export from firebase/index or provider? 
 // Actually usually we use hooks. But for a utility function we might need 'getFirestore()' or pass data.
 // Let's make it a standalone function that accepts firestore instance OR uses the modular SDK if initialized.
 
@@ -143,9 +142,9 @@ export async function recordPayoutTransaction(
         });
         console.log(`Payout of ${amount} recorded for Warehouse ${warehouseId}`);
         return { success: true };
-    } catch (e: any) {
+    } catch (e) {
         console.error("Payout Transaction Failed", e);
-        return { success: false, error: e.message };
+        return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
     }
 }
 

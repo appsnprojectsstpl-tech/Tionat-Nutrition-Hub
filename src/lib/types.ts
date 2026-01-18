@@ -81,6 +81,7 @@ export type UserProfile = {
   email: string;
   phoneNumber?: string;
   addresses?: string[];
+  currentAddress?: string; // Currently selected delivery address
   avatarUrl?: string;
   loyaltyTier?: 'Bronze' | 'Silver' | 'Gold';
   loyaltyPoints?: number;

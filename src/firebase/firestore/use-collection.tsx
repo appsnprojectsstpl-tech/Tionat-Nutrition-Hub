@@ -55,7 +55,7 @@ export interface InternalQuery extends Query<DocumentData> {
  * @returns {UseCollectionResult<T>} Object with data, isLoading, error.
  */
 export function useCollection<T = any>(
-    memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean})  | null | undefined,
+  memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & { __memo?: boolean }) | null | undefined,
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
   type StateDataType = ResultItemType[] | null;
@@ -66,30 +66,30 @@ export function useCollection<T = any>(
 
   const fetchData = useCallback(async (isInitial = false) => {
     if (!memoizedTargetRefOrQuery) {
-        setData(null);
-        if (isInitial) setIsLoading(false);
-        setError(null);
-        return;
+      setData(null);
+      if (isInitial) setIsLoading(false);
+      setError(null);
+      return;
     }
 
     if (isInitial) setIsLoading(true);
 
     try {
-        const snapshot = await getDocs(memoizedTargetRefOrQuery);
-        const results: ResultItemType[] = snapshot.docs.map(doc => ({ ...(doc.data() as T), id: doc.id }));
-        setData(results);
-        setError(null);
-    } catch (e: any) {
-        const path: string =
-          memoizedTargetRefOrQuery.type === 'collection'
-            ? (memoizedTargetRefOrQuery as CollectionReference).path
-            : (memoizedTargetRefOrQuery as unknown as InternalQuery)._query.path.canonicalString()
-        const contextualError = new FirestorePermissionError({ operation: 'list', path });
-        setError(contextualError);
-        setData(null);
-        errorEmitter.emit('permission-error', contextualError);
+      const snapshot = await getDocs(memoizedTargetRefOrQuery);
+      const results: ResultItemType[] = snapshot.docs.map(doc => ({ ...(doc.data() as T), id: doc.id }));
+      setData(results);
+      setError(null);
+    } catch (e) {
+      const path: string =
+        memoizedTargetRefOrQuery.type === 'collection'
+          ? (memoizedTargetRefOrQuery as CollectionReference).path
+          : (memoizedTargetRefOrQuery as unknown as InternalQuery)._query.path.canonicalString()
+      const contextualError = new FirestorePermissionError({ operation: 'list', path });
+      setError(contextualError);
+      setData(null);
+      errorEmitter.emit('permission-error', contextualError);
     } finally {
-        if (isInitial) setIsLoading(false);
+      if (isInitial) setIsLoading(false);
     }
   }, [memoizedTargetRefOrQuery]);
 
@@ -135,9 +135,9 @@ export function useCollection<T = any>(
     );
 
     return () => unsubscribe();
-  }, [memoizedTargetRefOrQuery]); 
-  
-  if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
+  }, [memoizedTargetRefOrQuery]);
+
+  if (memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
     throw new Error('Firebase query was not properly memoized using useMemoFirebase');
   }
 

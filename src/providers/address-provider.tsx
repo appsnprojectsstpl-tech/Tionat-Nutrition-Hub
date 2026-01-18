@@ -46,14 +46,14 @@ export function AddressProvider({ children }: { children: ReactNode }) {
             return;
         }
 
-        const unsubscribe = onSnapshot(userProfileRef, (snapshot: any) => {
+        const unsubscribe = onSnapshot(userProfileRef, (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.data() as UserProfile;
                 setCurrentAddress(data.currentAddress || (data.addresses && data.addresses[0]) || null);
                 setSavedAddresses(data.addresses || []);
             }
             setIsLoading(false);
-        }, (error: any) => {
+        }, (error) => {
             console.error("AddressProvider snapshot error:", error);
             setIsLoading(false);
         });

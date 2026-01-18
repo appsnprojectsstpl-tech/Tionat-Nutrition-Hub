@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { useCart } from '@/hooks/use-cart';
 import { useCheckoutValidation } from '@/hooks/use-checkout-validation';
 import { useReservation } from '@/hooks/use-reservation'; // Added import
-import { useAuth, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { useAuth, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, serverTimestamp, increment, runTransaction, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -126,8 +126,8 @@ export default function CheckoutPage() {
 
       applyCoupon(couponData);
       setCouponCode('');
-    } catch (e: any) {
-      toast({ title: "Coupon Failed", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Coupon Failed", description: e instanceof Error ? e.message : 'Invalid coupon', variant: "destructive" });
     } finally {
       setIsApplyingCoupon(false);
     }
@@ -436,10 +436,6 @@ export default function CheckoutPage() {
             const redeemRef = doc(historyCollectionRef);
             transaction.set(redeemRef, {
               type: 'REDEEM',
-              points: -pointsToDeduct, // Store as negative for consistency? Or positive with type? Usually signed is easier for sum but type is explicit. Let's store magnitude and use type.
-              // Actually showing (-200) is better. Let's store as negative.
-              // Wait, pointChange is net. But history should be explicit transactions.
-              // Let's store explicit negative for redeem.
               points: -pointsToDeduct,
               reason: `Redeemed on #${invoiceNumber}`,
               orderId: orderId,
@@ -548,11 +544,11 @@ export default function CheckoutPage() {
         // Legacy / Insecure Client-Side Only Flow ...
       */
 
-    } catch (error: any) {
+    } catch (error) {
       console.error("Checkout Error:", error);
       toast({
         title: "Order Failed",
-        description: error.message || "Could not place order.",
+        description: error instanceof Error ? error.message : "Could not place order.",
         variant: "destructive"
       });
       setIsSubmitting(false);
@@ -726,7 +722,7 @@ export default function CheckoutPage() {
                     <span className="text-sm text-green-700 font-medium flex items-center gap-1">
                       <Tag className="h-3 w-3" /> {coupon.code} applied
                     </span>
-                    <Button variant="ghost" size="xs" onClick={() => { removeCoupon(); setCouponCode(''); }} type="button" className="h-6 text-red-500 hover:text-red-700 hover:bg-red-50">
+                    <Button variant="ghost" size="sm" onClick={() => { removeCoupon(); setCouponCode(''); }} type="button" className="h-6 text-red-500 hover:text-red-700 hover:bg-red-50">
                       Remove
                     </Button>
                   </div>

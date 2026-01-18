@@ -137,9 +137,9 @@ export default function StockTransferPage() {
 
             toast({ title: "Transfer Successful", description: "Inventory moved successfully." });
             setItems([]);
-        } catch (e: any) {
+        } catch (e) {
             console.error(e);
-            toast({ title: "Transfer Failed", description: e.message, variant: "destructive" });
+            toast({ title: "Transfer Failed", description: e instanceof Error ? e.message : 'Transfer failed', variant: "destructive" });
         } finally {
             setIsTransferring(false);
         }

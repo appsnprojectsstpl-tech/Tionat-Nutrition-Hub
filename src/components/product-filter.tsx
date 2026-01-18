@@ -83,7 +83,7 @@ export function ProductFilter() {
     );
 
     // If categories fail to load, fallback to hardcoded (or empty)
-    const availableCategories = categoryDocs?.map((c: any) => c.name) || CATEGORIES;
+    const availableCategories = categoryDocs?.map((c) => c.name) || CATEGORIES;
 
     return (
         <Card className="h-fit">

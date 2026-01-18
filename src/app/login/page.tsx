@@ -81,7 +81,6 @@ function LoginContent() {
 
     if (userProfileSnap.exists()) {
       const userProfile = userProfileSnap.data() as UserProfile;
-      console.log("Login User Profile Role:", userProfile.role); // Debug
       // Admins get redirected to the admin dashboard
       if (userProfile.role === 'admin' || userProfile.role === 'superadmin' || userProfile.role === 'warehouse_admin') {
         finalRedirectUrl = '/admin';
