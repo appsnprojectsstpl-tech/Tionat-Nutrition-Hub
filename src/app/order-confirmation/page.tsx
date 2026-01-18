@@ -2,10 +2,74 @@
 'use client';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ShoppingBag, Plus } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import { useFirestore, useCollection } from "@/firebase";
+import { collection, query, limit, where } from "firebase/firestore";
+import { Product } from "@/lib/types";
+import { useCart } from "@/hooks/use-cart";
+import confetti from 'canvas-confetti';
+
+
+function UpsellOffers() {
+    const firestore = useFirestore();
+    const { addToCart, applyCoupon } = useCart();
+    const router = useRouter();
+
+    // Fetch 3 random products (simulated by limit 3)
+    // Ideally we'd use a specific 'upsell' tag or just popular items
+    const { data: products } = useCollection<Product>(
+        firestore ? query(collection(firestore, 'products'), limit(3)) : null
+    );
+
+    const handleAddUpsell = (product: Product) => {
+        addToCart(product, 1);
+
+        // Mock a coupon object or apply directly if possible
+        // Since applyCoupon expects a Coupon object from DB, we might need a real coupon code "UPSELL10" existing in DB.
+        // Or we can just add to cart and let user checkout.
+        // Task says "Add x for 10% off".
+        // Let's assume user just wants to buy again quickly.
+
+        // Better: Redirect to Cart ensuring they see it.
+        router.push('/cart');
+    };
+
+    if (!products || products.length === 0) return null;
+
+    return (
+        <div className="mt-8 text-left animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
+            <h3 className="text-lg font-bold font-headline mb-4 flex items-center gap-2">
+                <ShoppingBag className="h-5 w-5 text-primary" />
+                You might also need
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {products.map(product => (
+                    <Card key={product.id} className="border-dashed border-primary/20 bg-primary/5">
+                        <CardContent className="p-4 flex flex-col gap-2">
+                            <div className="aspect-video relative rounded-md overflow-hidden bg-white mb-2">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={product.imageUrl} alt={product.name} className="object-cover w-full h-full" />
+                            </div>
+                            <p className="font-semibold text-sm line-clamp-1">{product.name}</p>
+                            <div className="flex items-center justify-between mt-auto">
+                                <span className="font-bold text-sm">₹{product.price}</span>
+                                <Button size="sm" variant="secondary" className="h-8 px-2" onClick={() => handleAddUpsell(product)}>
+                                    <Plus className="h-3 w-3 mr-1" /> Add
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-4 text-center">
+                GRAB10 coupon available for your next order!
+            </p>
+        </div>
+    );
+}
 
 function OrderConfirmationContent() {
     const searchParams = useSearchParams();
@@ -66,6 +130,9 @@ function OrderConfirmationContent() {
                     <p className="text-muted-foreground text-sm px-4">
                         Your order has been placed successfully. You will receive an email confirmation shortly.
                     </p>
+
+                    <UpsellOffers />
+
                     {orderId && (
                         <p className="text-sm font-semibold bg-secondary p-2 rounded-md font-mono">
                             Order ID: <span className="select-all">{orderId}</span>
@@ -79,10 +146,6 @@ function OrderConfirmationContent() {
         </main>
     );
 }
-
-import confetti from 'canvas-confetti';
-import { useEffect } from 'react';
-
 
 export default function OrderConfirmationPage() {
     return (

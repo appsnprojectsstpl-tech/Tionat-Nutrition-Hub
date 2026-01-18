@@ -55,9 +55,8 @@ export function ProductCard({ product }: ProductCardProps) {
     e.preventDefault();
     e.stopPropagation();
     setIsLikedAnimating(true);
-    setTimeout(() => setIsLikedAnimating(false), 300);
-    toggleWishlist(product);
-  }
+    toggleWishlist(product.id);
+  };
 
   // Fake discount logic for display intensity
   const originalPrice = product.price * 1.25; // Assume 25% "off" for visual pop if not provided

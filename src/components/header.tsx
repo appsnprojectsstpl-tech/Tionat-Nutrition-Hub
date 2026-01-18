@@ -83,10 +83,19 @@ export function AppHeader() {
               <Utensils className="h-6 w-6" />
               <span className="font-headline">Tionat</span>
             </Link>
-            {/* Address Bar - Now Interactive with Toast if no Dialog */}
+            {/* Address Bar */}
             <AddressDialog>
               <AddressDisplay />
             </AddressDialog>
+            {/* Admin Link for Authorized Users */}
+            {isClient && userProfile && (userProfile.role === 'admin' || userProfile.role === 'superadmin' || userProfile.role === 'warehouse_admin') && (
+              <Button asChild variant="default" size="sm" className="hidden md:inline-flex bg-red-600 hover:bg-red-700 text-white animate-in fade-in">
+                <Link href="/admin">
+                  <Building2 className="mr-2 h-4 w-4" /> Admin Panel
+                </Link>
+              </Button>
+            )}
+
           </div>
 
           <div className="flex flex-1 items-center justify-end space-x-2">

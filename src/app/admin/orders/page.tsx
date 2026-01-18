@@ -26,10 +26,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
-import { collection, query, orderBy, writeBatch, doc, where } from "firebase/firestore";
+import { collection, query, orderBy, writeBatch, doc, where, limit } from "firebase/firestore";
 import { Order } from "@/lib/types";
 import { format } from 'date-fns';
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OrderSummaryBoard } from "@/components/admin/order-summary-board";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -67,7 +67,7 @@ export default function AdminOrdersPage() {
       }
 
       // Super Admin (or Admin) sees all
-      return query(baseRef, orderBy('orderDate', 'desc'));
+      return query(baseRef, orderBy('orderDate', 'desc'), limit(50));
     },
     [firestore, user, userProfile]
   );
@@ -148,7 +148,14 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-bold font-headline tracking-tight">Orders & Returns</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold font-headline tracking-tight">Orders & Returns</h1>
+        <Button asChild>
+          <Link href="/admin/orders/create">
+            <Plus className="mr-2 h-4 w-4" /> Create Order
+          </Link>
+        </Button>
+      </div>
       <OrderSummaryBoard orders={orders || []} />
 
       <Tabs defaultValue="all" className="w-full">

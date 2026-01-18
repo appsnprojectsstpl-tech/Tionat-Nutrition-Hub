@@ -81,10 +81,13 @@ function LoginContent() {
 
     if (userProfileSnap.exists()) {
       const userProfile = userProfileSnap.data() as UserProfile;
+      console.log("Login User Profile Role:", userProfile.role); // Debug
       // Admins get redirected to the admin dashboard
       if (userProfile.role === 'admin' || userProfile.role === 'superadmin' || userProfile.role === 'warehouse_admin') {
         finalRedirectUrl = '/admin';
       }
+    } else {
+      console.warn("User Profile does not exist yet.");
     }
 
     toast({ title: 'Login Successful', description: "Welcome!" });
@@ -241,7 +244,7 @@ function LoginContent() {
                       <div className="flex items-center">
                         <FormLabel>Password</FormLabel>
                         {!isSigningUp && <Link
-                          href="#"
+                          href="/forgot-password"
                           className="ml-auto inline-block text-sm underline"
                         >
                           Forgot your password?

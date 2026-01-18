@@ -21,6 +21,7 @@ export type Product = {
   description: string;
   slug: string;
   price: number;
+  costPrice?: number;
   categoryId: string;
   subcategoryId: string;
   status: ProductStatus;
@@ -36,6 +37,19 @@ export type Product = {
 export type Inventory = {
   productId: string;
   stock: number;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  type: 'percentage' | 'fixed_amount';
+  value: number;
+  minOrderValue: number; // 0 if none
+  maxDiscount?: number; // For percentage based
+  expiryDate: Date | string | any; // Timestamp or date string
+  isActive: boolean;
+  usageLimit?: number;
+  usageCount: number;
 }
 
 export type Warehouse = {
@@ -73,6 +87,8 @@ export type UserProfile = {
   role?: 'superadmin' | 'warehouse_admin' | 'admin' | 'user';
   managedWarehouseId?: string; // For warehouse admins
   wishlist?: string[]; // Array of Product IDs
+  referralCode?: string;
+  referredBy?: string;
 }
 
 export type RewardHistory = {
@@ -190,3 +206,49 @@ export type WalletTransaction = {
   orderId?: string;
 };
 
+export type Banner = {
+  id: string;
+  imageUrl: string;
+  title?: string;
+  subtitle?: string;
+  link?: string;
+  isActive: boolean;
+  isActive: boolean;
+  order: number;
+};
+
+export type Supplier = {
+  id: string;
+  name: string;
+  contactPerson: string;
+  email: string;
+  phone: string;
+  address: string;
+  gstin?: string; // Tax ID
+};
+
+export type POStatus = 'DRAFT' | 'SENT' | 'RECEIVED' | 'CANCELLED';
+
+export type POItem = {
+  productId: string;
+  name: string;
+  quantity: number;
+  unitCost: number; // Cost Price
+  receivedQuantity?: number;
+};
+
+export type PurchaseOrder = {
+  id: string;
+  poNumber: string; // e.g. PO-2024-001
+  supplierId: string;
+  supplierName: string;
+  warehouseId: string;
+  warehouseName: string;
+  items: POItem[];
+  status: POStatus;
+  totalCost: number;
+  createdAt: Timestamp | FieldValue;
+  expectedDate?: string; // YYYY-MM-DD
+  receivedAt?: Timestamp | FieldValue;
+  notes?: string;
+};

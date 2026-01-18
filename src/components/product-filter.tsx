@@ -8,6 +8,8 @@ import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import { useCollection, useFirestore } from '@/firebase';
+import { collection } from 'firebase/firestore';
 
 const CATEGORIES = [
     'Nutritional Care',
@@ -74,6 +76,15 @@ export function ProductFilter() {
         router.push('/search');
     };
 
+    const firestore = useFirestore();
+    // Fetch Categories dynamically
+    const { data: categoryDocs } = useCollection(
+        firestore ? collection(firestore, 'categories') : null
+    );
+
+    // If categories fail to load, fallback to hardcoded (or empty)
+    const availableCategories = categoryDocs?.map((c: any) => c.name) || CATEGORIES;
+
     return (
         <Card className="h-fit">
             <CardHeader>
@@ -86,8 +97,8 @@ export function ProductFilter() {
                     <Slider
                         defaultValue={[0, 2000]}
                         value={priceRange}
-                        max={5000}
-                        step={50}
+                        max={10000}
+                        step={100}
                         onValueChange={handlePriceChange}
                         className="my-4"
                     />
@@ -103,8 +114,8 @@ export function ProductFilter() {
                 {/* Categories */}
                 <div className="space-y-4">
                     <h3 className="font-semibold text-sm">Categories</h3>
-                    <div className="space-y-2">
-                        {CATEGORIES.map((category) => (
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                        {availableCategories.map((category: string) => (
                             <div key={category} className="flex items-center space-x-2">
                                 <Checkbox
                                     id={category}

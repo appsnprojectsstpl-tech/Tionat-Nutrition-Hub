@@ -1,20 +1,20 @@
 'use client';
 
+import { useMemo } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { Order, Warehouse } from "@/lib/types";
-import { useMemo } from "react";
-import Link from 'next/link';
-import { Button } from "@/components/ui/button";
+import { Product, Order, Warehouse } from "@/lib/types"; // Ensure Product is imported
 
 interface AdminAlertsProps {
     orders: Order[];
     warehouses: Warehouse[];
+    products: Product[];
     isLoading: boolean;
 }
 
-export function AdminAlerts({ orders, warehouses, isLoading }: AdminAlertsProps) {
+export function AdminAlerts({ orders, warehouses, products, isLoading }: AdminAlertsProps) {
 
     // 1. High Value Orders Alert
     const highValueOrders = useMemo(() => {
@@ -22,27 +22,23 @@ export function AdminAlerts({ orders, warehouses, isLoading }: AdminAlertsProps)
     }, [orders]);
 
     // 2. Zero Order Alert (Quiet Week Detection)
-    // We check if an active warehouse has had NO orders in the passed list.
-    // Assuming 'orders' passed to this component is "Recent Orders" or "All Orders" (fetched in dashboard).
-    // Ideally we need orders from the last 24h. 
-    // If the passed 'orders' list is comprehensive (which it is in the current dashboard implementation), we can use it.
     const quietWarehouses = useMemo(() => {
         if (!warehouses || !orders) return [];
-
         const oneDayAgo = new Date();
         oneDayAgo.setHours(oneDayAgo.getHours() - 24);
-
-        // Get IDs of warehouses that HAVE orders in last 24h
         const activeWarehouseIds = new Set(
             orders
                 .filter(o => o.orderDate && (o.orderDate as any).toDate() > oneDayAgo)
                 .map(o => o.warehouseId)
         );
-
-        // Find Active Warehouses NOT in that set
         return warehouses.filter(w => w.isActive && !activeWarehouseIds.has(w.id));
     }, [orders, warehouses]);
 
+    // 3. Low Stock Alert
+    const lowStockItems = useMemo(() => {
+        if (!products) return [];
+        return products.filter(p => (p.stock !== undefined ? p.stock : 0) <= 5 && p.isActive).slice(0, 10);
+    }, [products]);
 
     if (isLoading) {
         return (
@@ -53,7 +49,7 @@ export function AdminAlerts({ orders, warehouses, isLoading }: AdminAlertsProps)
         )
     }
 
-    const hasAlerts = highValueOrders.length > 0 || quietWarehouses.length > 0;
+    const hasAlerts = highValueOrders.length > 0 || quietWarehouses.length > 0 || lowStockItems.length > 0;
 
     return (
         <Card className="border-red-100 bg-red-50/10">
@@ -80,11 +76,32 @@ export function AdminAlerts({ orders, warehouses, isLoading }: AdminAlertsProps)
                                     <li key={order.id}>
                                         <span className="font-mono">#{order.invoiceNumber || order.id.slice(0, 6)}</span>
                                         — ₹{order.totalAmount.toLocaleString()}
-                                        <Link href={`/admin/orders/${order.id}`} className="ml-2 underline text-blue-600">View</Link>
+                                        <Link href={`/admin/order-details?id=${order.id}`} className="ml-2 underline text-blue-600">View</Link>
                                     </li>
                                 ))}
                                 {highValueOrders.length > 3 && <li>...and {highValueOrders.length - 3} more.</li>}
                             </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Low Stock Items */}
+                {lowStockItems.length > 0 && (
+                    <Alert className="bg-white border-yellow-200">
+                        <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                        <AlertTitle className="text-yellow-800">Low Stock Warning ({lowStockItems.length}+ items)</AlertTitle>
+                        <AlertDescription className="mt-2 text-yellow-700">
+                            <p className="text-sm mb-2">The following active products have 5 or less in stock:</p>
+                            <div className="flex flex-wrap gap-2">
+                                {lowStockItems.map(p => (
+                                    <div key={p.id} className="px-2 py-1 bg-yellow-100 rounded text-xs border border-yellow-200 font-medium">
+                                        {p.name} ({p.stock || 0})
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-2">
+                                <Link href="/admin/products/bulk-edit" className="text-xs underline font-bold">Resupply via Bulk Editor</Link>
+                            </div>
                         </AlertDescription>
                     </Alert>
                 )}

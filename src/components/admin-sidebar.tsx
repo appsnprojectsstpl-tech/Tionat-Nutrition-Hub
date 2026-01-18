@@ -14,6 +14,12 @@ import {
     TicketPercent,
     Store,
     Boxes,
+    Image,
+    Megaphone,
+    ClipboardList,
+    ArrowRightLeft,
+    ScanBarcode,
+    FileText,
 } from "lucide-react"
 import {
     Tooltip,
@@ -30,13 +36,19 @@ const adminNavLinks = [
     { href: "/", icon: Home, label: "Home" },
     { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/admin/warehouses", icon: Store, label: "Warehouses" },
+    { href: "/admin/transfers", icon: ArrowRightLeft, label: "Transfers" },
     { href: "/admin/inventory", icon: Boxes, label: "Inventory" },
+    { href: "/admin/inventory/labels", icon: ScanBarcode, label: "Labels" },
     { href: "/admin/products", icon: Package, label: "Products" },
     { href: "/admin/orders", icon: ShoppingBag, label: "Orders" },
+    { href: "/admin/reports", icon: FileText, label: "Reports" },
+    { href: "/admin/purchase-orders", icon: ClipboardList, label: "Purchase Orders" },
     { href: "/admin/users", icon: Users, label: "Users" },
     { href: "/admin/import", icon: Upload, label: "Bulk Import" },
     { href: "/admin/loyalty", icon: Gem, label: "Loyalty" },
     { href: "/admin/coupons", icon: TicketPercent, label: "Coupons" },
+    { href: "/admin/marketing", icon: Megaphone, label: "Marketing" },
+    { href: "/admin/banners", icon: Image, label: "Banners" },
     { href: "/admin/seed", icon: Database, label: "Seed Data" },
 ]
 
@@ -50,7 +62,7 @@ export function AdminSidebar() {
     // Define restricted links for Warehouse Admin
     // They can only see: Dashboard, Products, Orders
     // We can filter the main list.
-    const allowedForWarehouse = ['Dashboard', 'Inventory', 'Orders', 'Home'];
+    const allowedForWarehouse = ['Dashboard', 'Inventory', 'Orders', 'Purchase Orders', 'Transfers', 'Home'];
 
     const filteredNavLinks = adminNavLinks.filter(link => {
         if (userProfile?.role === 'warehouse_admin') {

@@ -1,7 +1,7 @@
 'use client';
 
-import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
+import { useAuth, useCollection, useFirestore, useMemoFirebase, useDoc } from '@/firebase';
+import { collection, query, orderBy, limit, doc } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,13 @@ export default function WalletPage() {
 
     const { data: transactions, isLoading } = useCollection<any>(transactionsQuery);
 
+    // Fetch User Profile for Balance
+    const profileQuery = useMemoFirebase(
+        () => (firestore && user ? doc(firestore, 'users', user.uid) : null),
+        [firestore, user]
+    );
+    const { data: userProfile } = useDoc<any>(profileQuery);
+
     return (
         <div className="min-h-screen bg-background container mx-auto px-4 py-8">
             <div className="mb-6">
@@ -40,7 +47,7 @@ export default function WalletPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-4xl font-bold flex items-center gap-2">
-                            ₹0.00 <Wallet className="h-6 w-6 text-primary opacity-50" />
+                            ₹{(userProfile?.walletBalance || 0).toFixed(2)} <Wallet className="h-6 w-6 text-primary opacity-50" />
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">
                             Used for instant refunds and quick checkouts.
@@ -53,10 +60,10 @@ export default function WalletPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-4xl font-bold flex items-center gap-2">
-                            0 <Coins className="h-6 w-6 text-yellow-500" />
+                            {userProfile?.loyaltyPoints || 0} <Coins className="h-6 w-6 text-yellow-500" />
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">
-                            Value: ₹0.00 (Redeemable on next order)
+                            Value: ₹{((userProfile?.loyaltyPoints || 0) / 10).toFixed(2)} (Redeemable on next order)
                         </p>
                     </CardContent>
                 </Card>

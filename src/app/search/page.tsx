@@ -28,36 +28,30 @@ function SearchResults() {
         firestore ? collection(firestore, 'products') : null
     );
 
-    const filteredProducts = allProducts?.filter(product => {
-        // 1. Text Search (Name or Description)
-        const matchesSearch = !searchQuery ||
-            product.name.toLowerCase().includes(searchQuery) ||
-            product.description.toLowerCase().includes(searchQuery);
+    const filteredProducts = allProducts?.map(product => {
+        const nameLower = product.name.toLowerCase();
+        const descLower = product.description.toLowerCase();
+        const q = searchQuery.trim();
 
-        // 2. Price Range
+        let score = 0;
+        if (!q) {
+            score = 1; // Show all if no query
+        } else {
+            if (nameLower === q) score = 100;
+            else if (nameLower.startsWith(q)) score = 80;
+            else if (nameLower.includes(q)) score = 50;
+            else if (descLower.includes(q)) score = 20;
+        }
+
+        // Filters
         const matchesPrice = product.price >= minPrice && product.price <= maxPrice;
-
-        // 3. Category
-        // Note: Our products have 'categoryId', we need to map category names or just check exact match if names are stored?
-        // Let's assume for now filters send names and we match against categoryId (which might be an ID or name).
-        // If 'categoryId' is an ID, this filter needs mapping. 
-        // Checking types.ts: Category has `name: 'Nutritional Care' ...`.
-        // If products store `categoryId` as "Nutritional Care" (which seems to be the case in some NoSQL setups or we need to join).
-        // Let's check `types.ts` again: `categoryId: string`. It is likely an ID.
-        // For strictly client-side without joining: We might check if the ID matches or if we can infer.
-        // Or assume for this task `categoryId` == Name or we fetch categories to map.
-        // SIMPLIFICATION: We will assume we filter by `categoryId` matching the selected name OR
-        // we can filter loosely if categories in DB are names.
-
-        // Actually, looking at `types.ts`, `Category` has `name`. 
-        // If we want to filter by readable names in URL, we need to know the IDs.
-        // Strategy: Filter by matching the string to `categoryId` assuming for now IDs are simple or correspond.
-        // If this fails, we will see empty results for category filters.
-
         const matchesCategory = categories.length === 0 || categories.includes(product.categoryId);
 
-        return matchesSearch && matchesPrice && matchesCategory;
-    });
+        return { product, score, isValid: score > 0 && matchesPrice && matchesCategory };
+    })
+        .filter(item => item.isValid)
+        .sort((a, b) => b.score - a.score)
+        .map(item => item.product);
 
     if (isLoading) {
         return (

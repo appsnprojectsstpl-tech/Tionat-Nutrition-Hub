@@ -31,8 +31,8 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
         const unsub = onSnapshot(doc(firestore, 'users', user.uid), (snap) => {
             if (snap.exists()) {
                 const data = snap.data() as UserProfile;
-                // TEMP: Allow ALL users to access Admin Panel (User Request)
-                const isAdmin = true; // data.role === 'admin' || data.role === 'superadmin';
+                // Check for valid admin roles
+                const isAdmin = data.role === 'admin' || data.role === 'superadmin' || data.role === 'warehouse_admin';
                 setStatus(isAdmin ? 'authorized' : 'unauthorized');
                 if (!isAdmin) {
                     // Optional: Redirect after a delay or let them see the 403 screen

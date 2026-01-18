@@ -26,7 +26,7 @@ import { Loader2, Search, SlidersHorizontal, AlertTriangle } from "lucide-react"
 import { WarehouseStockManager } from "@/components/admin/warehouse-stock-manager";
 
 export default function InventoryPage() {
-    const { userProfile, isLoading: isUserLoading } = useUser();
+    const { userProfile, isUserLoading } = useUser();
     const firestore = useFirestore();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);

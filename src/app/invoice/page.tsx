@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { Order } from '@/lib/types';
-import { useParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 
-export default function InvoicePage() {
-    const { id } = useParams();
+function InvoiceContent() {
+    const searchParams = useSearchParams();
+    const id = searchParams.get('id');
     const firestore = useFirestore();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
@@ -19,10 +20,7 @@ export default function InvoicePage() {
         const fetchOrder = async () => {
             if (!firestore || !id) return;
             try {
-                // Try fetching from main orders collection first (as it's public/admin accessible usually, 
-                // but for security usually we check user ownership. 
-                // For this MVP we assume the UUID is hard to guess or we fetch from user subcollection if we had userIdContext.
-                // BETTER: Fetch from 'orders' collection which is the source of truth for invoices.
+                // Try fetching from main orders collection first
                 const docRef = doc(firestore, 'orders', id as string);
                 const snap = await getDoc(docRef);
                 if (snap.exists()) {
@@ -145,5 +143,13 @@ export default function InvoicePage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function InvoicePage() {
+    return (
+        <Suspense fallback={<div className="flex justify-center p-12"><Loader2 className="animate-spin" /></div>}>
+            <InvoiceContent />
+        </Suspense>
     );
 }

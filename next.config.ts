@@ -9,7 +9,8 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
 const nextConfig: NextConfig = {
   /* config options here */
-  // output: 'export', // Disabled to allow API Routes (Chatbot/Admin) to build. 
+  output: 'export',
+  // Disabled to allow API Routes (Chatbot/Admin) to build. 
   // If building for strict Static Export (APK without backend), uncomment this AND delete src/app/api.
   // Only set basePath if it's defined (i.e. for GitHub Pages)
   ...(basePath ? { basePath, assetPrefix: basePath } : {}),

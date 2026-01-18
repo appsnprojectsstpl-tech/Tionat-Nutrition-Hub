@@ -5,13 +5,20 @@ import { BottomNav } from './bottom-nav';
 import { DesktopHeader } from './desktop-header';
 import { OfflineBanner } from './offline-banner';
 import { cn } from '@/lib/utils';
+import { ShoppingCart, Home, Search, User, Menu } from 'lucide-react';
 import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import { useFCM } from '@/hooks/use-fcm';
+import { FlashSaleBanner } from './flash-sale-banner';
 
 
 
 export function AppShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const router = useRouter(); // Added router import
+    useFCM(); // Initialize Push Notifications
+
+    // Hide shell on specific routes (e.g. login, admin)
     const isAdminRoute = pathname?.startsWith('/admin');
 
     useEffect(() => {
@@ -46,6 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
     return (
         <>
+            <FlashSaleBanner />
             <div className="md:hidden">
                 <MobileHeader />
             </div>

@@ -540,4 +540,27 @@ export const onOrderUpdate = functions.firestore
         if (newData.status === previousData.status) return;
 
         console.log(`Order ${context.params.orderId} status changed to ${newData.status}`);
+
+        const userId = newData.userId;
+        if (!userId) return;
+
+        try {
+            const userSnap = await admin.firestore().collection('users').doc(userId).get();
+            const fcmToken = userSnap.data()?.fcmToken;
+
+            if (fcmToken) {
+                const message = {
+                    notification: {
+                        title: `Order Update: ${newData.status}`,
+                        body: `Your order #${context.params.orderId.slice(0, 8)} is now ${newData.status}.`
+                    },
+                    token: fcmToken
+                };
+
+                await admin.messaging().send(message);
+                console.log(`Notification sent to user ${userId}`);
+            }
+        } catch (error) {
+            console.error("Error sending notification:", error);
+        }
     });

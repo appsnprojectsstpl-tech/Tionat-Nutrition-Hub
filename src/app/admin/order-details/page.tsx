@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { format } from 'date-fns';
-import { Loader2, Package, Truck, CheckCircle, XCircle, AlertTriangle, Printer } from 'lucide-react';
+import { Loader2, Package, Truck, CheckCircle, XCircle, AlertTriangle, Printer, Edit, Minus, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import type { Order } from '@/lib/types';
 import { useMemo, Suspense } from 'react';
 
@@ -19,10 +20,8 @@ function OrderDetailsContent() {
     const searchParams = useSearchParams();
     const id = searchParams.get('id');
     const firestore = useFirestore();
-    const functions = useFunctions();
     const { toast } = useToast();
-
-    const { user, isUserLoading } = useUser();
+    const { user } = useUser();
 
     // Memoize the doc ref to prevent infinite re-renders
     const orderRef = useMemo(() => {
@@ -31,12 +30,14 @@ function OrderDetailsContent() {
 
     const { data: order, isLoading } = useDoc<Order>(orderRef);
 
+    // Editing State
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedItems, setEditedItems] = useState<any[]>([]);
+
     const handleStatusUpdate = async (newStatus: Order['status']) => {
         if (!firestore || !id || !user) return;
         try {
-            // Updated to use Client-Side Logic directly (Serverless)
             const orderDocRef = doc(firestore, 'orders', id);
-
             await (await import('firebase/firestore')).updateDoc(orderDocRef, {
                 status: newStatus,
                 updatedAt: (await import('firebase/firestore')).serverTimestamp(),
@@ -48,7 +49,6 @@ function OrderDetailsContent() {
                 })
             });
 
-            // If user ID exists, update user's copy too
             if (order?.userId) {
                 const userOrderRef = doc(firestore, 'users', order.userId, 'orders', id);
                 await (await import('firebase/firestore')).updateDoc(userOrderRef, {
@@ -64,17 +64,65 @@ function OrderDetailsContent() {
         }
     };
 
-    if (!id) {
-        return <div className="p-10 text-center">No Order ID provided.</div>;
+    const startEditing = () => {
+        if (!order) return;
+        // Normalize items
+        const items = order.items || order.orderItems || [];
+        setEditedItems(JSON.parse(JSON.stringify(items))); // Deep copy
+        setIsEditing(true);
+    };
+
+    const cancelEditing = () => {
+        setIsEditing(false);
+        setEditedItems([]);
+    };
+
+    const updateItemQty = (index: number, newQty: number) => {
+        if (newQty < 1) return;
+        const newItems = [...editedItems];
+        newItems[index].quantity = newQty;
+        setEditedItems(newItems);
+    };
+
+    const removeItem = (index: number) => {
+        if (confirm('Remove this item from the order?')) {
+            const newItems = [...editedItems];
+            newItems.splice(index, 1);
+            setEditedItems(newItems);
+        }
+    };
+
+    const saveOrderEdits = async () => {
+        if (!firestore || !id) return;
+        try {
+            const newTotal = editedItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+
+            const updates = {
+                items: editedItems,
+                orderItems: editedItems, // Keep sync
+                totalAmount: newTotal,
+                updatedAt: (await import('firebase/firestore')).serverTimestamp()
+            };
+
+            const orderDocRef = doc(firestore, 'orders', id);
+            await (await import('firebase/firestore')).updateDoc(orderDocRef, updates);
+
+            if (order?.userId && order.userId !== 'GUEST') {
+                const userOrderRef = doc(firestore, 'users', order.userId, 'orders', id);
+                await (await import('firebase/firestore')).updateDoc(userOrderRef, updates);
+            }
+
+            setIsEditing(false);
+            toast({ title: "Order Updated", description: "Quantities and Total updated successfully." });
+        } catch (e) {
+            console.error(e);
+            toast({ title: "Save Failed", description: "Could not save changes.", variant: "destructive" });
+        }
     }
 
-    if (isLoading) {
-        return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
-    }
-
-    if (!order) {
-        return <div className="p-10 text-center">Order not found</div>;
-    }
+    if (!id) return <div className="p-10 text-center">No Order ID provided.</div>;
+    if (isLoading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
+    if (!order) return <div className="p-10 text-center">Order not found</div>;
 
     return (
         <div className="space-y-6">
@@ -85,9 +133,16 @@ function OrderDetailsContent() {
                         Placed on {order.createdAt ? format(order.createdAt.toDate(), 'PPP p') : 'N/A'}
                     </p>
                 </div>
-                <Badge className="text-lg px-4 py-1" variant={order.status === 'Paid' ? 'default' : 'secondary'}>
-                    {order.status}
-                </Badge>
+                <div className="flex gap-2">
+                    {!isEditing && (order.status === 'Pending' || order.status === 'Accepted' || order.status === 'Processing') && (
+                        <Button variant="outline" onClick={startEditing}>
+                            <Edit className="mr-2 h-4 w-4" /> Edit Order
+                        </Button>
+                    )}
+                    <Badge className="text-lg px-4 py-1" variant={order.status === 'Paid' ? 'default' : 'secondary'}>
+                        {order.status}
+                    </Badge>
+                </div>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
@@ -129,7 +184,10 @@ function OrderDetailsContent() {
                         <Separator className="my-2" />
                         <div className="flex justify-between font-bold text-lg">
                             <span>Total</span>
-                            <span>₹{order.financials?.totalAmount?.toFixed(2) || order.totalAmount}</span>
+                            <span>₹{isEditing
+                                ? editedItems.reduce((acc, item) => acc + (item.price * item.quantity), 0).toFixed(2)
+                                : (order.financials?.totalAmount || order.totalAmount)?.toFixed(2)}
+                            </span>
                         </div>
                     </CardContent>
                 </Card>
@@ -137,7 +195,17 @@ function OrderDetailsContent() {
 
             {/* Order Items */}
             <Card>
-                <CardHeader><CardTitle>Items</CardTitle></CardHeader>
+                <CardHeader>
+                    <CardTitle className="flex justify-between items-center">
+                        <span>Items</span>
+                        {isEditing && (
+                            <div className="flex gap-2">
+                                <Button size="sm" variant="ghost" onClick={cancelEditing}>Cancel</Button>
+                                <Button size="sm" onClick={saveOrderEdits}>Save Changes</Button>
+                            </div>
+                        )}
+                    </CardTitle>
+                </CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader>
@@ -146,18 +214,40 @@ function OrderDetailsContent() {
                                 <TableHead>Price</TableHead>
                                 <TableHead>Qty</TableHead>
                                 <TableHead className="text-right">Total</TableHead>
+                                {isEditing && <TableHead></TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {(order.items || order.orderItems || []).map((item: any, idx: number) => (
+                            {(isEditing ? editedItems : (order.items || order.orderItems || [])).map((item: any, idx: number) => (
                                 <TableRow key={idx}>
                                     <TableCell>
                                         <div className="font-medium">{item.name}</div>
                                         <div className="text-xs text-muted-foreground">{item.variantId !== 'default' ? item.variantId : ''}</div>
                                     </TableCell>
                                     <TableCell>₹{item.priceAtBooking || item.price}</TableCell>
-                                    <TableCell>x{item.quantity}</TableCell>
+                                    <TableCell>
+                                        {isEditing ? (
+                                            <div className="flex items-center gap-2">
+                                                <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateItemQty(idx, item.quantity - 1)} disabled={item.quantity <= 1}>
+                                                    <Minus className="h-3 w-3" />
+                                                </Button>
+                                                <span className="w-4 text-center">{item.quantity}</span>
+                                                <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => updateItemQty(idx, item.quantity + 1)}>
+                                                    <Plus className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            `x${item.quantity}`
+                                        )}
+                                    </TableCell>
                                     <TableCell className="text-right">₹{(((item.priceAtBooking || item.price || 0) * (item.quantity || 1)) || 0).toFixed(2)}</TableCell>
+                                    {isEditing && (
+                                        <TableCell>
+                                            <Button size="icon" variant="destructive" className="h-8 w-8" onClick={() => removeItem(idx)}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </TableCell>
+                                    )}
                                 </TableRow>
                             ))}
                         </TableBody>

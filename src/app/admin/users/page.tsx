@@ -100,7 +100,7 @@ export default function AdminUsersPage() {
     const userRef = doc(firestore, 'users', user.id);
     setDocumentNonBlocking(userRef, { role: newRole, managedWarehouseId: null }, { merge: true }); // Clear warehouse id if switching away
 
-    logAdminAction({
+    logAdminAction(firestore, {
       action: 'USER_ROLE_UPDATE',
       performedBy: auth?.currentUser?.email || 'unknown',
       targetId: user.id,
@@ -123,7 +123,7 @@ export default function AdminUsersPage() {
       managedWarehouseId: selectedWarehouseId
     }, { merge: true });
 
-    logAdminAction({
+    logAdminAction(firestore, {
       action: 'USER_ROLE_UPDATE',
       performedBy: auth?.currentUser?.email || 'unknown',
       targetId: selectedUser.id,

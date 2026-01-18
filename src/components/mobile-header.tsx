@@ -8,8 +8,12 @@ import { NotificationsSheet } from './notifications-sheet';
 import { SearchInput } from './search-input';
 import { ModeToggle } from './mode-toggle';
 
+import { useUser } from '@/firebase';
+
 export function MobileHeader() {
     const { currentAddress } = useAddress();
+    const { userProfile } = useUser();
+    const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'superadmin' || userProfile?.role === 'warehouse_admin';
 
     return (
         <header className="sticky top-0 z-40 w-full bg-background/80 backdrop-blur-md border-b border-border/40 transition-all duration-300">
@@ -26,6 +30,12 @@ export function MobileHeader() {
                     </Link>
 
                     <div className="flex items-center gap-2">
+                        {/* Admin Link (Mobile Icon) */}
+                        {isAdmin && (
+                            <Link href="/admin" className="p-2 bg-red-100 rounded-full text-red-600 hover:bg-red-200">
+                                <Utensils className="h-4 w-4" />
+                            </Link>
+                        )}
                         <ModeToggle />
                         <NotificationsSheet />
 

@@ -1,5 +1,5 @@
 
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, Firestore } from 'firebase/firestore';
 import { db } from '@/firebase'; // Assuming export from '@/firebase'
 
 export type AuditActionType =

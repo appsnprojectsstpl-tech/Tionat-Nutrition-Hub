@@ -149,56 +149,9 @@ export default function Home() {
                 {/* Search moved to Global Header */}
                 {/* Search moved to Global Header */}
 
-                {/* Hero Carousel */}
+                {/* Dynamic Hero Carousel */}
                 <div className="mt-4 px-4 overflow-hidden">
-                    <Carousel className="w-full" opts={{ loop: true }}>
-                        <CarouselContent>
-                            {featuredProducts && featuredProducts.length > 0 ? (
-                                featuredProducts.map((product) => (
-                                    <CarouselItem key={product.id}>
-                                        <div className="relative h-48 w-full overflow-hidden rounded-2xl shadow-lg">
-                                            {/* Background Image with Overlay */}
-                                            {product.imageUrl ? (
-                                                <Image
-                                                    src={product.imageUrl}
-                                                    alt={product.name}
-                                                    fill
-                                                    className="object-cover transition-transform hover:scale-105 duration-700"
-                                                />
-                                            ) : (
-                                                <div className="absolute inset-0 bg-gradient-to-r from-primary to-primary/60" />
-                                            )}
-                                            <div className="absolute inset-0 bg-black/40" />
-
-                                            {/* Text Content */}
-                                            <div className="absolute inset-0 flex flex-col justify-center p-6 text-white">
-                                                <Badge className="w-fit mb-2 bg-white/20 hover:bg-white/20 border-none text-white backdrop-blur-sm">FEATURED</Badge>
-                                                <h2 className="text-2xl font-headline font-bold leading-tight line-clamp-2 text-white">{product.name}</h2>
-                                                <p className="text-sm text-white/90 mt-1 line-clamp-1">{product.description || 'Check out our special offer'}</p>
-                                                <Link href={`/product-view?slug=${product.slug}`}>
-                                                    <Button size="sm" className="mt-4 bg-white text-primary hover:bg-white/90 rounded-full font-bold">
-                                                        Shop Now
-                                                    </Button>
-                                                </Link>
-                                            </div>
-                                        </div>
-                                    </CarouselItem>
-                                ))
-                            ) : (
-                                <CarouselItem>
-                                    <div className="relative h-40 w-full overflow-hidden rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 shadow-lg">
-                                        <div className="absolute inset-0 flex flex-col justify-center p-6 text-white">
-                                            <Badge className="w-fit mb-2 bg-white/20 hover:bg-white/20 border-none text-white backdrop-blur-sm">FLAT 50% OFF</Badge>
-                                            <h2 className="text-2xl font-headline font-bold leading-tight">Healthy <br /><span className="text-white">Snacks</span></h2>
-                                            <p className="text-xs text-white/80 mt-1">Millet cookies & more</p>
-                                        </div>
-                                        <div className="absolute -right-8 -top-8 bg-white/10 w-40 h-40 rounded-full blur-3xl"></div>
-                                        <Heart className="absolute right-6 bottom-4 h-14 w-14 text-white opacity-80 rotate-12" />
-                                    </div>
-                                </CarouselItem>
-                            )}
-                        </CarouselContent>
-                    </Carousel>
+                    <HeroCarousel featuredProducts={featuredProducts} />
                 </div>
 
                 {/* Visual Categories Grid */}
@@ -363,7 +316,113 @@ function FloatingCartBar() {
 }
 
 
-// Minimalistic Avatar component to avoid import issues if it's not globally available
+// Hero Carousel Component
+import { Banner } from '@/lib/types';
+
+function HeroCarousel({ featuredProducts }: { featuredProducts: Product[] | null }) {
+    const firestore = useFirestore();
+
+    const bannerQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'banners'), where('isActive', '==', true), orderBy('order', 'asc'));
+    }, [firestore]);
+
+    const { data: banners } = useCollection<Banner>(bannerQuery);
+
+    // 1. If Banners exist, show them
+    if (banners && banners.length > 0) {
+        return (
+            <Carousel className="w-full" opts={{ loop: true, autoplay: true }}>
+                <CarouselContent>
+                    {banners.map((banner) => (
+                        <CarouselItem key={banner.id}>
+                            <div className="relative h-48 md:h-64 w-full overflow-hidden rounded-2xl shadow-lg">
+                                <Image
+                                    src={banner.imageUrl}
+                                    alt={banner.title || 'Banner'}
+                                    fill
+                                    className="object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/20" /> {/* Slight overlay */}
+
+                                {(banner.title || banner.subtitle) && (
+                                    <div className="absolute inset-0 flex flex-col justify-center p-6 md:p-10 text-white">
+                                        {banner.subtitle && (
+                                            <Badge className="w-fit mb-2 bg-white/20 hover:bg-white/20 border-none text-white backdrop-blur-sm uppercase tracking-wide">
+                                                {banner.subtitle}
+                                            </Badge>
+                                        )}
+                                        {banner.title && (
+                                            <h2 className="text-3xl md:text-4xl font-headline font-bold leading-tight drop-shadow-md">
+                                                {banner.title}
+                                            </h2>
+                                        )}
+                                        {banner.link && (
+                                            <Link href={banner.link}>
+                                                <Button size="sm" className="mt-4 bg-white text-primary hover:bg-white/90 rounded-full font-bold px-6">
+                                                    Explore
+                                                </Button>
+                                            </Link>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </CarouselItem>
+                    ))}
+                </CarouselContent>
+                <CarouselPrevious className="left-2 bg-white/50 border-none hover:bg-white hidden sm:flex" />
+                <CarouselNext className="right-2 bg-white/50 border-none hover:bg-white hidden sm:flex" />
+            </Carousel>
+        )
+    }
+
+    // 2. Fallback to Featured Products (Old Logic)
+    if (featuredProducts && featuredProducts.length > 0) {
+        return (
+            <Carousel className="w-full" opts={{ loop: true }}>
+                <CarouselContent>
+                    {featuredProducts.map((product) => (
+                        <CarouselItem key={product.id}>
+                            <div className="relative h-48 w-full overflow-hidden rounded-2xl shadow-lg">
+                                <Image
+                                    src={product.imageUrl}
+                                    alt={product.name}
+                                    fill
+                                    className="object-cover transition-transform hover:scale-105 duration-700"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent" />
+                                <div className="absolute inset-0 flex flex-col justify-center p-6 text-white">
+                                    <Badge className="w-fit mb-2 bg-primary text-white border-none">FEATURED</Badge>
+                                    <h2 className="text-2xl font-headline font-bold leading-tight line-clamp-2">{product.name}</h2>
+                                    <p className="text-sm text-white/90 mt-1 line-clamp-1">{product.description}</p>
+                                    <Link href={`/product-view?slug=${product.slug}`}>
+                                        <Button size="sm" className="mt-4 bg-white text-primary hover:bg-white/90 rounded-full font-bold">
+                                            Shop Now
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </div>
+                        </CarouselItem>
+                    ))}
+                </CarouselContent>
+            </Carousel>
+        );
+    }
+
+    // 3. Last Resort Fallback
+    return (
+        <div className="relative h-40 w-full overflow-hidden rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 shadow-lg">
+            <div className="absolute inset-0 flex flex-col justify-center p-6 text-white">
+                <Badge className="w-fit mb-2 bg-white/20 hover:bg-white/20 border-none text-white backdrop-blur-sm">FLAT 50% OFF</Badge>
+                <h2 className="text-2xl font-headline font-bold leading-tight">Healthy <br /><span className="text-white">Snacks</span></h2>
+                <p className="text-xs text-white/80 mt-1">Millet cookies & more</p>
+            </div>
+            <Heart className="absolute right-6 bottom-4 h-14 w-14 text-white opacity-80 rotate-12" />
+        </div>
+    );
+}
+
 const Avatar = ({ children }: { children: React.ReactNode }) => <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden">{children}</div>
 const AvatarImage = ({ src }: { src?: string }) => src ? <Image src={src} alt="avatar" width={40} height={40} className="w-full h-full object-cover" /> : null;
 const AvatarFallback = ({ children }: { children: React.ReactNode }) => <div>{children}</div>
+

@@ -1,9 +1,89 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // DEBUG MODE: Allow everything (User Requested)
+
+    // Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      // Check custom claims or a specific user document field
+      // For MVP, we'll check the users collection for 'role'
+      return isSignedIn() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'warehouse_admin');
+    }
+
+    // --- USERS ---
+    match /users/{userId} {
+      // Owner can read/write their own profile
+      allow read, update: if isOwner(userId) || isAdmin();
+      // Only Admin can delete or list all
+      allow list, delete: if isAdmin();
+      // Allow creation if auth matches (Signup)
+      allow create: if isOwner(userId);
+      
+      // Subcollections (Wishlist, Addresses, Loyalty History)
+      match /{document=**} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    // --- PRODUCTS ---
+    match /products/{productId} {
+      allow read: if true; // Public
+      allow write: if isAdmin();
+    }
+    
+    // --- CATEGORIES ---
+    match /categories/{catId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- ORDERS ---
+    match /orders/{orderId} {
+      // Owner can read own orders
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      // Create allowed if authenticated and userId matches
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // Updates? Only Admin can change status ideally. 
+      // User might cancel?
+      allow update: if isAdmin() || (isOwner(resource.data.userId) && request.resource.data.status == 'Cancelled');
+    }
+
+    // --- COUPONS ---
+    match /coupons/{couponId} {
+      allow read: if true; // Needed for checkout validation
+      allow write: if isAdmin();
+    }
+    
+    // --- BANNER / MARKETING ---
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /marketing/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- ADMIN ONLY COLLECTIONS ---
+    match /warehouses/{wId} { allow read, write: if isAdmin(); }
+    match /purchase_orders/{poId} { allow read, write: if isAdmin(); }
+    match /warehouse_inventory/{invId} { allow read, write: if isAdmin(); }
+    match /inventory_logs/{logId} { allow read, write: if isAdmin(); }
+    match /audit_logs/{logId} { allow read, write: if isAdmin(); }
+    
+    // Default Deny
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if isAdmin(); // Safety net: Admins can do anything
     }
   }
 }

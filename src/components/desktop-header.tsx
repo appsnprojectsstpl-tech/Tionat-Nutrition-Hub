@@ -11,13 +11,18 @@ import { AddressDialog } from './address-dialog';
 import { NotificationsSheet } from './notifications-sheet';
 import { SearchInput } from './search-input';
 
+import { useUser } from '@/firebase';
+
 export function DesktopHeader() {
     const { itemCount } = useCart();
+    const { userProfile } = useUser();
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'superadmin' || userProfile?.role === 'warehouse_admin';
 
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -58,6 +63,15 @@ export function DesktopHeader() {
                     <ModeToggle />
 
                     <NotificationsSheet />
+
+                    {/* Admin Link (Desktop) - Visible on lg screens and up */}
+                    {isAdmin && (
+                        <Button asChild variant="default" size="sm" className="hidden lg:inline-flex bg-red-600 hover:bg-red-700 text-white animate-in fade-in">
+                            <Link href="/admin">
+                                <Utensils className="mr-2 h-4 w-4" /> Admin Panel
+                            </Link>
+                        </Button>
+                    )}
 
                     <Button asChild variant="ghost" size="icon">
                         <Link href="/wishlist">

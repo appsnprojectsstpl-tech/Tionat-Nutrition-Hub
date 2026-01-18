@@ -44,7 +44,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Star, ChevronRight, LogOut, Shield, Edit, Home, Trash2, PlusCircle, ShoppingBag, RefreshCw, Download, Wallet } from "lucide-react";
+import { Star, ChevronRight, LogOut, Shield, Edit, Home, Trash2, PlusCircle, ShoppingBag, RefreshCw, Download, Wallet, Heart, Gift } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth, useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
 import { doc, collection, query, orderBy, arrayUnion, arrayRemove, getDoc, getDocs } from "firebase/firestore";
@@ -341,7 +341,7 @@ export default function ProfilePage() {
 
     if (!userProfile) return null;
 
-    const isAdmin = userProfile.role === 'admin' || userProfile.role === 'superadmin';
+    const isAdmin = userProfile.role === 'admin' || userProfile.role === 'superadmin' || userProfile.role === 'warehouse_admin';
 
     return (
         <div className="min-h-screen bg-background">
@@ -471,11 +471,14 @@ export default function ProfilePage() {
                         </Card>
 
                         <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center font-headline">
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="flex items-center font-headline text-base">
                                     <Star className="w-6 h-6 mr-2 text-yellow-500" />
                                     TioRewards Status
                                 </CardTitle>
+                                <Button variant="ghost" size="sm" asChild>
+                                    <Link href="/profile/loyalty">View History <ChevronRight className="ml-1 h-3 w-3" /></Link>
+                                </Button>
                             </CardHeader>
                             <CardContent className="grid gap-6 sm:grid-cols-2">
                                 <div className="flex flex-col items-center justify-center p-6 bg-secondary rounded-lg">
@@ -517,8 +520,43 @@ export default function ProfilePage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-bold">₹0.00</span>
+                                    <span className="text-2xl font-bold">₹{(userProfile.walletBalance || 0).toFixed(2)}</span>
                                     <span className="text-xs text-muted-foreground">Available Balance</span>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="bg-gradient-to-r from-pink-50 to-white">
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="text-base font-headline flex items-center gap-2">
+                                    <Heart className="h-5 w-5 text-red-500" />
+                                    My Wishlist
+                                </CardTitle>
+                                <Button variant="ghost" size="sm" asChild>
+                                    <Link href="/wishlist">View All <ChevronRight className="ml-1 h-3 w-3" /></Link>
+                                </Button>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-bold">{userProfile.wishlist?.length || 0}</span>
+                                    <span className="text-xs text-muted-foreground">Saved Items</span>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="bg-gradient-to-r from-violet-100 to-indigo-50 border-indigo-200">
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="text-base font-headline flex items-center gap-2 text-indigo-900">
+                                    <Gift className="h-5 w-5 text-indigo-600" />
+                                    Refer & Earn
+                                </CardTitle>
+                                <Button variant="ghost" size="sm" asChild>
+                                    <Link href="/profile/referrals">Invite <ChevronRight className="ml-1 h-3 w-3" /></Link>
+                                </Button>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-sm font-medium text-indigo-700">Get 100 pts per friend</span>
                                 </div>
                             </CardContent>
                         </Card>

@@ -130,6 +130,7 @@ export default function AdminDashboard() {
         <AdminAlerts
           orders={filteredOrders || []}
           warehouses={warehouses || []}
+          products={products || []}
           isLoading={isLoadingOrders || isLoadingWarehouses}
         />
       </div>

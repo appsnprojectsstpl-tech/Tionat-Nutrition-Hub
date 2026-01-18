@@ -19,6 +19,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://tionat.com'),
   title: {
     default: 'Tionat Nutrition Hub | 10 Min Grocery Delivery',
     template: '%s | Tionat'
@@ -60,7 +61,7 @@ export const metadata: Metadata = {
 import { ThemeProvider } from "@/components/theme-provider";
 import { UpdateChecker } from "@/components/update-checker";
 import { NotificationHandler } from "@/components/notification-handler";
-import { ChatWidget } from "@/components/chat-widget";
+
 
 import { Outfit } from 'next/font/google';
 
@@ -100,7 +101,7 @@ export default function RootLayout({
                   <AppShell>
                     {children}
                   </AppShell>
-                  <ChatWidget />
+
                 </WarehouseProvider>
               </CartProvider>
             </AddressProvider>

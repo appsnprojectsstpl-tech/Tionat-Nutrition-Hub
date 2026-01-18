@@ -8,6 +8,7 @@ import { MultiImageUpload } from "@/components/multi-image-upload";
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { logAdminAction } from "@/lib/audit-logger";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -76,6 +77,7 @@ import { WarehouseStockManager } from "@/components/admin/warehouse-stock-manage
 const productSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
   price: z.coerce.number().positive('Price must be a positive number'),
+  costPrice: z.coerce.number().min(0).optional(),
   categoryId: z.string().min(1, 'Category is required'),
   subcategoryId: z.string().min(1, 'Subcategory is required'),
   status: z.enum(['New Arrival', 'Coming Soon', 'Available']),
@@ -247,28 +249,41 @@ export default function AdminProductsPage() {
           return;
         }
 
-        const batch = writeBatch(firestore);
+        const BATCH_SIZE = 400;
         let updatedCount = 0;
         let notFoundCount = 0;
 
         const productsByName = new Map(products.map(p => [(p.name || '').toLowerCase(), p.id]));
+        const validRows: { productId: string; stock: number }[] = [];
 
+        // 1. Prepare Valid Operations
         data.forEach(row => {
           const stock = parseInt(row.stock, 10);
           const productName = row.productName?.trim().toLowerCase();
           const productId = productsByName.get(productName);
 
           if (productId && !isNaN(stock)) {
-            const docRef = doc(firestore, 'inventory', productId);
-            batch.set(docRef, { productId, stock }, { merge: true });
-            updatedCount++;
+            validRows.push({ productId, stock });
           } else if (productName) {
             notFoundCount++;
           }
         });
 
+        // 2. Execute in Batches
         try {
-          await batch.commit();
+          for (let i = 0; i < validRows.length; i += BATCH_SIZE) {
+            const batch = writeBatch(firestore);
+            const chunk = validRows.slice(i, i + BATCH_SIZE);
+
+            chunk.forEach(({ productId, stock }) => {
+              const docRef = doc(firestore, 'inventory', productId);
+              batch.set(docRef, { productId, stock }, { merge: true });
+              updatedCount++;
+            });
+
+            await batch.commit();
+          }
+
           toast({
             title: 'Bulk Update Successful',
             description: `${updatedCount} inventory records updated. ${notFoundCount > 0 ? `${notFoundCount} product names not found.` : ''}`,
@@ -419,6 +434,14 @@ export default function AdminProductsPage() {
       const inventoryRef = doc(firestore, 'inventory', editingProduct.id);
       setDocumentNonBlocking(inventoryRef, { productId: editingProduct.id, stock }, { merge: true });
 
+      logAdminAction({
+        action: 'PRODUCT_UPDATE',
+        performedBy: user?.email || 'unknown',
+        targetId: editingProduct.id,
+        targetType: 'PRODUCT',
+        details: `Updated product: ${data.name}. Price: ${data.price}, Stock: ${stock}`
+      });
+
       toast({
         title: "Product Updated",
         description: `${data.name} has been successfully updated.`,
@@ -430,6 +453,14 @@ export default function AdminProductsPage() {
 
       const inventoryRef = doc(firestore, 'inventory', newProductRef.id);
       setDocumentNonBlocking(inventoryRef, { productId: newProductRef.id, stock }, { merge: true });
+
+      logAdminAction({
+        action: 'PRODUCT_CREATE',
+        performedBy: user?.email || 'unknown',
+        targetId: newProductRef.id,
+        targetType: 'PRODUCT',
+        details: `Created new product: ${data.name}. Price: ${data.price}, Stock: ${stock}`
+      });
 
       toast({
         title: "Product Added",
@@ -451,6 +482,14 @@ export default function AdminProductsPage() {
       const invDocRef = doc(firestore, 'inventory', productId);
       deleteDocumentNonBlocking(invDocRef);
 
+      logAdminAction({
+        action: 'PRODUCT_DELETE',
+        performedBy: user?.email || 'unknown',
+        targetId: productId,
+        targetType: 'PRODUCT',
+        details: `Deleted product: ${productName}`
+      });
+
       toast({
         title: "Product Deleted",
         description: `${productName} has been removed.`,
@@ -469,6 +508,11 @@ export default function AdminProductsPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4">
         <h1 className="text-3xl font-bold font-headline tracking-tight">Products</h1>
         <div className="flex items-center gap-2 ml-auto">
+          {userProfile?.role !== 'warehouse_admin' && (
+            <Button size="sm" variant="outline" asChild className="gap-1">
+              <Link href="/admin/products/bulk-edit">Bulk Edit</Link>
+            </Button>
+          )}
           {userProfile?.role !== 'warehouse_admin' && (
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
@@ -503,19 +547,34 @@ export default function AdminProductsPage() {
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="price"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Price</FormLabel>
-                          <FormControl>
-                            <Input type="number" placeholder="120" {...field} value={field.value ?? 0} onChange={e => field.onChange(e.target.valueAsNumber || 0)} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="flex gap-4">
+                      <FormField
+                        control={form.control}
+                        name="price"
+                        render={({ field }) => (
+                          <FormItem className="flex-1">
+                            <FormLabel>Price (Sales)</FormLabel>
+                            <FormControl>
+                              <Input type="number" placeholder="120" {...field} value={field.value ?? 0} onChange={e => field.onChange(e.target.valueAsNumber || 0)} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="costPrice"
+                        render={({ field }) => (
+                          <FormItem className="flex-1">
+                            <FormLabel>Cost Price</FormLabel>
+                            <FormControl>
+                              <Input type="number" placeholder="80" {...field} value={field.value ?? 0} onChange={e => field.onChange(e.target.valueAsNumber || 0)} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                     <div className="flex gap-4">
                       <FormField
                         control={form.control}

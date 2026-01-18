@@ -151,11 +151,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       // Let's just 0 it but keep coupon in state (user might add more items)
       discountAmount = 0;
     } else {
-      if (coupon.discountType === 'PERCENTAGE') {
-        const calculated = (subtotal * coupon.discountValue) / 100;
+      if (coupon.type === 'percentage') {
+        const calculated = (subtotal * coupon.value) / 100;
         discountAmount = coupon.maxDiscount ? Math.min(calculated, coupon.maxDiscount) : calculated;
       } else {
-        discountAmount = coupon.discountValue;
+        discountAmount = coupon.value;
       }
     }
   }
