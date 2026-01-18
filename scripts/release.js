@@ -28,7 +28,7 @@ try {
     }
 
     console.log('\n✅ Build Complete!');
-    console.log('APK Location: android/app/build/outputs/apk/release/app-release-unsigned.apk');
+    console.log('APK Location: android/app/build/outputs/apk/release/app-release.apk');
 
     // Optional: Git Push
     console.log('\n🚀 Step 4: Pushing to GitHub...');
