@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Download, TrendingUp, TrendingDown, DollarSign, FileText } from 'lucide-react';
 import Papa from 'papaparse';
 import { format } from 'date-fns';
+import { toDate } from '@/lib/date-utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function ReportsPage() {
@@ -46,7 +47,7 @@ export default function ReportsPage() {
 
     const reportData = validOrders.map(order => {
         const orderId = order.id;
-        const date = order.createdAt ? format(order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt), 'yyyy-MM-dd') : 'N/A';
+        const date = (order as any).orderDate ? format(toDate((order as any).orderDate), 'yyyy-MM-dd') : 'N/A';
         const revenue = order.finalAmount || order.totalAmount || 0;
 
         let orderCost = 0;
@@ -71,7 +72,7 @@ export default function ReportsPage() {
         totalTax += tax;
 
         return {
-            orderId: order.poNumber || order.id,
+            orderId: order.invoiceNumber || order.id,
             date,
             status: order.status,
             revenue: revenue.toFixed(2),

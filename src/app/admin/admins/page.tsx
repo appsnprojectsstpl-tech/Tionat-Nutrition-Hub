@@ -67,7 +67,7 @@ export default function AdminAdminsPage() {
                     <TableCell className="font-medium">{user.firstName} {user.lastName}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell className="hidden sm:table-cell">{user.phoneNumber || 'N/A'}</TableCell>
-                    <TableCell className="hidden md:table-cell">{user.address || 'N/A'}</TableCell>
+                    <TableCell className="hidden md:table-cell">{user.addresses?.[0] || 'N/A'}</TableCell>
                     <TableCell>
                       <Badge variant="default" className="gap-1 pl-2">
                         <ShieldCheck className="h-3.5 w-3.5" />

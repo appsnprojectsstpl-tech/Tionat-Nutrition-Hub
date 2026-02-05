@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, where, orderBy, doc, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -22,16 +22,19 @@ interface ActiveCart {
 
 export function AbandonedCartsView() {
     const firestore = useFirestore();
+    const { userProfile } = useUser();
     const { toast } = useToast();
     const [recoveringId, setRecoveringId] = useState<string | null>(null);
 
     // Query for active carts
     const cartsQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
+        if (!firestore || !userProfile) return null;
+        if (userProfile.role !== 'admin' && userProfile.role !== 'superadmin') return null;
+
         // In a real app we'd filter by time > 24h. 
         // For demo, we just show all non-empty active carts.
         return query(collection(firestore, 'active_carts'), where('status', '==', 'active'));
-    }, [firestore]);
+    }, [firestore, userProfile]);
 
     const { data: carts, isLoading } = useCollection<ActiveCart>(cartsQuery);
 

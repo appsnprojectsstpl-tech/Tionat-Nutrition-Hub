@@ -46,7 +46,7 @@ export function EmailCampaignsView() {
             });
 
             // 2. Log Action
-            logAdminAction({
+            logAdminAction(firestore, {
                 action: 'CAMPAIGN_CREATE',
                 performedBy: user?.email || 'unknown',
                 targetId: campaignRef.id,

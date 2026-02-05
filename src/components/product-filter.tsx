@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { useCollection, useFirestore } from '@/firebase';
+import { Category } from '@/lib/types';
 import { collection } from 'firebase/firestore';
 
 const CATEGORIES = [
@@ -78,7 +79,7 @@ export function ProductFilter() {
 
     const firestore = useFirestore();
     // Fetch Categories dynamically
-    const { data: categoryDocs } = useCollection(
+    const { data: categoryDocs } = useCollection<Category>(
         firestore ? collection(firestore, 'categories') : null
     );
 

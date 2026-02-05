@@ -8,9 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import Link from 'next/link';
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/hooks/use-cart";
+import { useWarehouse } from '@/context/warehouse-context';
 import { useFirestore } from "@/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import type { Order, Product } from "@/lib/types";
@@ -24,6 +26,7 @@ export function OrderHistoryTab({ orders, isLoading }: OrderHistoryTabProps) {
     const router = useRouter();
     const { toast } = useToast();
     const { addToCart } = useCart();
+    const { selectedWarehouse } = useWarehouse();
     const firestore = useFirestore();
 
     const [searchTerm, setSearchTerm] = useState("");
@@ -31,6 +34,10 @@ export function OrderHistoryTab({ orders, isLoading }: OrderHistoryTabProps) {
     const handleReorder = async (e: React.MouseEvent, order: Order) => {
         e.stopPropagation(); // Prevent row click
         if (!firestore) return;
+        if (!selectedWarehouse) {
+            toast({ title: "Location Required", description: "Please select a delivery location first.", variant: "destructive" });
+            return;
+        }
 
         toast({
             title: "Reordering...",
@@ -43,7 +50,7 @@ export function OrderHistoryTab({ orders, isLoading }: OrderHistoryTabProps) {
                 const productDoc = await getDoc(doc(firestore, 'products', item.productId));
                 if (productDoc.exists()) {
                     const productData = { id: productDoc.id, ...productDoc.data() } as Product;
-                    addToCart(productData, item.quantity);
+                    addToCart(productData, item.quantity, selectedWarehouse.id);
                     addedCount++;
                 }
             } catch (e) {
@@ -66,7 +73,7 @@ export function OrderHistoryTab({ orders, isLoading }: OrderHistoryTabProps) {
     const filteredOrders = orders?.filter(order =>
         order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         // Add more search fields if needed, e.g. products inside
-        order.orderItems.some(item => item.productName.toLowerCase().includes(searchTerm.toLowerCase()))
+        order.orderItems.some(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     return (

@@ -67,7 +67,7 @@ function OrderDetailsContent() {
     const startEditing = () => {
         if (!order) return;
         // Normalize items
-        const items = order.items || order.orderItems || [];
+        const items = (order as any).items || order.orderItems || [];
         setEditedItems(JSON.parse(JSON.stringify(items))); // Deep copy
         setIsEditing(true);
     };
@@ -130,7 +130,7 @@ function OrderDetailsContent() {
                 <div>
                     <h1 className="text-3xl font-bold font-headline">Order #{order.id.slice(0, 8)}</h1>
                     <p className="text-muted-foreground text-sm">
-                        Placed on {order.createdAt ? format(order.createdAt.toDate(), 'PPP p') : 'N/A'}
+                        Placed on {order.orderDate ? format((order.orderDate as any).toDate(), 'PPP p') : 'N/A'}
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -167,12 +167,12 @@ function OrderDetailsContent() {
                     <CardContent className="space-y-2">
                         <div className="flex justify-between">
                             <span>Method:</span>
-                            <span className="font-medium">{order.payment?.method || order.paymentMethod}</span>
+                            <span className="font-medium">{(order as any).payment?.method || order.paymentMethod}</span>
                         </div>
                         <div className="flex justify-between">
                             <span>Status:</span>
-                            <Badge variant={order.payment?.status === 'SUCCESS' ? 'default' : 'destructive'}>
-                                {order.payment?.status || 'PENDING'}
+                            <Badge variant={(order as any).payment?.status === 'SUCCESS' ? 'default' : 'destructive'}>
+                                {(order as any).payment?.status || 'PENDING'}
                             </Badge>
                         </div>
                         {order.payment?.gatewayPaymentId && (
@@ -218,7 +218,7 @@ function OrderDetailsContent() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {(isEditing ? editedItems : (order.items || order.orderItems || [])).map((item: any, idx: number) => (
+                            {(isEditing ? editedItems : ((order as any).items || order.orderItems || [])).map((item: any, idx: number) => (
                                 <TableRow key={idx}>
                                     <TableCell>
                                         <div className="font-medium">{item.name}</div>

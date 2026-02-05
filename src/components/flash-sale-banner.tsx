@@ -26,13 +26,21 @@ export function FlashSaleBanner() {
 
             if (diff <= 0) {
                 setTimeLeft(null); // Expired
+                clearInterval(timer);
                 return;
             }
 
             const h = Math.floor(diff / (1000 * 60 * 60));
             const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             const s = Math.floor((diff % (1000 * 60)) / 1000);
-            setTimeLeft({ h, m, s });
+
+            // Only update if time actually changed
+            setTimeLeft(prev => {
+                if (!prev || prev.h !== h || prev.m !== m || prev.s !== s) {
+                    return { h, m, s };
+                }
+                return prev;
+            });
         };
 
         calculateTime();

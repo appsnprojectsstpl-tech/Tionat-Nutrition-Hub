@@ -79,7 +79,7 @@ export function WarehousesView() {
 
             await setDoc(doc(firestore, 'warehouses', id), warehouseData, { merge: true });
 
-            logAdminAction({
+            logAdminAction(firestore, {
                 action: 'WAREHOUSE_UPDATE',
                 performedBy: user?.email || 'unknown',
                 targetId: id,
@@ -101,7 +101,7 @@ export function WarehousesView() {
 
         try {
             await deleteDoc(doc(firestore, 'warehouses', id));
-            logAdminAction({
+            logAdminAction(firestore, {
                 action: 'WAREHOUSE_UPDATE',
                 performedBy: user?.email || 'unknown',
                 targetId: id,

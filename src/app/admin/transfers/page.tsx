@@ -1,269 +1,239 @@
 'use client';
 
-import { useState } from 'react';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, addDoc, serverTimestamp, doc, runTransaction, increment } from 'firebase/firestore';
+import { useState, useMemo } from 'react';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, doc, query, where, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
 import { Product, Warehouse } from '@/lib/types';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useToast } from '@/hooks/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { ArrowRightLeft, Trash2, Loader2, ArrowRight } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Loader2, ArrowRightLeft } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { logAdminAction } from "@/lib/audit-logger";
+import { Badge } from "@/components/ui/badge";
 
-export default function StockTransferPage() {
+export default function TransfersPage() {
+    const { user, userProfile } = useUser();
     const firestore = useFirestore();
     const { toast } = useToast();
-    const [isTransferring, setIsTransferring] = useState(false);
 
-    const warehousesQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'warehouses');
-    }, [firestore]);
+    // 1. Fetch Warehouses & Products
+    // Only Super Admin should access this, but we'll double check.
+    const isSuperAdmin = userProfile?.role === 'superadmin' || userProfile?.role === 'admin';
 
-    const { data: warehouses } = useCollection<Warehouse>(warehousesQuery);
+    const warehousesRef = useMemoFirebase(
+        () => (firestore ? collection(firestore, 'warehouses') : null),
+        [firestore]
+    );
+    const { data: warehouses } = useCollection<Warehouse>(warehousesRef);
 
-    const productsQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
-        return collection(firestore, 'products');
-    }, [firestore]);
+    const productsRef = useMemoFirebase(
+        () => (firestore ? collection(firestore, 'products') : null),
+        [firestore]
+    );
+    const { data: products } = useCollection<Product>(productsRef);
 
-    const { data: products } = useCollection<Product>(productsQuery);
+    // 2. Form State
+    const [sourceId, setSourceId] = useState<string>('');
+    const [destId, setDestId] = useState<string>('');
+    const [selectedProductId, setSelectedProductId] = useState<string>('');
+    const [quantity, setQuantity] = useState<number>(0);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const [sourceId, setSourceId] = useState('');
-    const [destId, setDestId] = useState('');
-
-    // Items to transfer
-    const [items, setItems] = useState<{ productId: string; name: string; quantity: number }[]>([]);
-
-    // Search State
-    const [itemSearch, setItemSearch] = useState('');
-    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-    const [newItemQty, setNewItemQty] = useState(1);
-
-    const handleAddItem = () => {
-        if (!selectedProduct) return;
-        if (items.find(i => i.productId === selectedProduct.id)) {
-            toast({ title: "Item exists", description: "This product is already in the transfer list.", variant: "destructive" });
-            return;
-        }
-        setItems(prev => [...prev, {
-            productId: selectedProduct.id,
-            name: selectedProduct.name,
-            quantity: newItemQty
-        }]);
-        setSelectedProduct(null);
-        setItemSearch('');
-        setNewItemQty(1);
-    };
+    // 3. Validation Logic
+    const isValid = sourceId && destId && sourceId !== destId && selectedProductId && quantity > 0;
 
     const handleTransfer = async () => {
-        if (!firestore) return;
-        if (!sourceId || !destId) {
-            toast({ title: "Invalid warehouses", description: "Select source and destination.", variant: "destructive" });
-            return;
-        }
-        if (sourceId === destId) {
-            toast({ title: "Invalid warehouses", description: "Source and destination cannot be the same.", variant: "destructive" });
-            return;
-        }
-        if (items.length === 0) {
-            toast({ title: "No items", description: "Add items to transfer.", variant: "destructive" });
-            return;
-        }
+        if (!firestore || !isValid) return;
+        setIsSubmitting(true);
 
-        setIsTransferring(true);
         try {
-            await runTransaction(firestore, async (transaction) => {
-                // 1. Verify Stock
-                for (const item of items) {
-                    const sourceInvRef = doc(firestore, 'warehouse_inventory', `${sourceId}_${item.productId}`);
-                    const sourceSnap = await transaction.get(sourceInvRef);
+            // A. Check Source Stock
+            const sourceInvRef = doc(firestore, 'warehouse_inventory', `${sourceId}_${selectedProductId}`);
+            const destInvRef = doc(firestore, 'warehouse_inventory', `${destId}_${selectedProductId}`);
 
-                    if (!sourceSnap.exists()) {
-                        throw new Error(`Product ${item.name} not found in source warehouse.`);
-                    }
+            const sourceSnapshot = await getDoc(sourceInvRef);
 
-                    const currentStock = sourceSnap.data().stock || 0;
-                    if (currentStock < item.quantity) {
-                        throw new Error(`Insufficient stock for ${item.name}. Available: ${currentStock}`);
-                    }
-                }
+            if (!sourceSnapshot.exists()) {
+                throw new Error("Source warehouse does not have this product record.");
+            }
 
-                // 2. Perform Transfer
-                for (const item of items) {
-                    const sourceInvRef = doc(firestore, 'warehouse_inventory', `${sourceId}_${item.productId}`);
-                    const destInvRef = doc(firestore, 'warehouse_inventory', `${destId}_${item.productId}`);
+            const currentSourceStock = sourceSnapshot.data().stock || 0;
+            if (currentSourceStock < quantity) {
+                throw new Error(`Insufficient stock in source. Available: ${currentSourceStock}`);
+            }
 
-                    // Decrement Source
-                    transaction.update(sourceInvRef, {
-                        stock: increment(-item.quantity),
-                        updatedAt: serverTimestamp()
-                    });
+            // B. Execute Transfer (Atomic)
+            const batch = writeBatch(firestore);
 
-                    // Increment Destination (Upsert)
-                    transaction.set(destInvRef, {
-                        warehouseId: destId,
-                        productId: item.productId,
-                        stock: increment(item.quantity),
-                        updatedAt: serverTimestamp()
-                    }, { merge: true });
-
-                    // Log Transfer Out
-                    const logOutRef = doc(collection(firestore, 'inventory_logs'));
-                    transaction.set(logOutRef, {
-                        warehouseId: sourceId,
-                        productId: item.productId,
-                        productName: item.name,
-                        change: -item.quantity,
-                        reason: 'TRANSFER_OUT',
-                        note: `To ${warehouses?.find(w => w.id === destId)?.name}`,
-                        userId: 'admin',
-                        userName: 'Admin',
-                        timestamp: serverTimestamp()
-                    });
-
-                    // Log Transfer In
-                    const logInRef = doc(collection(firestore, 'inventory_logs'));
-                    transaction.set(logInRef, {
-                        warehouseId: destId,
-                        productId: item.productId,
-                        productName: item.name,
-                        change: item.quantity,
-                        reason: 'TRANSFER_IN',
-                        note: `From ${warehouses?.find(w => w.id === sourceId)?.name}`,
-                        userId: 'admin',
-                        userName: 'Admin',
-                        timestamp: serverTimestamp()
-                    });
-                }
+            // Decrement Source
+            batch.update(sourceInvRef, {
+                stock: currentSourceStock - quantity,
+                updatedAt: serverTimestamp()
             });
 
-            toast({ title: "Transfer Successful", description: "Inventory moved successfully." });
-            setItems([]);
-        } catch (e) {
-            console.error(e);
-            toast({ title: "Transfer Failed", description: e instanceof Error ? e.message : 'Transfer failed', variant: "destructive" });
+            // Increment Dest (Create if missing)
+            // Ideally we check if dest exists, if not set, else update increment. 
+            // Since we can't do conditional logic easily in batch without reading (which we didn't for dest yet), 
+            // let's read dest first.
+            const destSnapshot = await getDoc(destInvRef);
+
+            if (destSnapshot.exists()) {
+                const currentDestStock = destSnapshot.data().stock || 0;
+                batch.update(destInvRef, {
+                    stock: currentDestStock + quantity,
+                    updatedAt: serverTimestamp()
+                });
+            } else {
+                batch.set(destInvRef, {
+                    warehouseId: destId,
+                    productId: selectedProductId,
+                    stock: quantity,
+                    updatedAt: serverTimestamp()
+                });
+            }
+
+            // Log Transfer
+            const transferLogRef = doc(collection(firestore, 'inventory_transfers'));
+            batch.set(transferLogRef, {
+                sourceWarehouseId: sourceId,
+                destWarehouseId: destId,
+                productId: selectedProductId,
+                quantity: quantity,
+                performedBy: user?.uid,
+                timestamp: serverTimestamp()
+            });
+
+            await batch.commit();
+
+            logAdminAction(firestore, {
+                action: 'INVENTORY_TRANSFER',
+                targetType: 'PRODUCT',
+                targetId: selectedProductId,
+                performedBy: user?.email || 'unknown',
+                details: `Transferred ${quantity} units from ${sourceId} to ${destId}`
+            });
+
+            toast({ title: "Transfer Successful", description: "Stock moved successfully." });
+            setQuantity(0);
+
+        } catch (error) {
+            console.error("Transfer failed", error);
+            toast({
+                title: "Transfer Failed",
+                description: error instanceof Error ? error.message : "An error occurred.",
+                variant: "destructive"
+            });
         } finally {
-            setIsTransferring(false);
+            setIsSubmitting(false);
         }
     };
 
-    const filteredProducts = products?.filter(p => p.name.toLowerCase().includes(itemSearch.toLowerCase()));
+    if (!isSuperAdmin) {
+        return <div className="p-8 text-center text-red-500">Authorized Personnel Only</div>;
+    }
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold font-headline">Stock Transfers</h1>
-                <p className="text-muted-foreground">Move inventory between warehouses.</p>
-            </div>
+        <div className="max-w-4xl mx-auto space-y-6">
+            <h1 className="text-3xl font-bold font-headline">Stock Transfer</h1>
+            <p className="text-muted-foreground">Move inventory between warehouses.</p>
 
             <div className="grid md:grid-cols-2 gap-8 items-start">
-                <Card>
+                {/* Source */}
+                <Card className="border-l-4 border-l-blue-500">
                     <CardHeader>
-                        <CardTitle>Transfer Details</CardTitle>
-                        <CardDescription>Select locations and items.</CardDescription>
+                        <CardTitle>Source Warehouse</CardTitle>
+                        <CardDescription>Where stock is coming FROM</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-6">
-                        <div className="flex gap-4 items-center">
-                            <div className="flex-1 space-y-2">
-                                <Label>Source Warehouse</Label>
-                                <Select value={sourceId} onValueChange={setSourceId}>
-                                    <SelectTrigger><SelectValue placeholder="From..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {warehouses?.map(w => (
-                                            <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <ArrowRight className="h-6 w-6 text-muted-foreground mt-6" />
-                            <div className="flex-1 space-y-2">
-                                <Label>Destination Warehouse</Label>
-                                <Select value={destId} onValueChange={setDestId}>
-                                    <SelectTrigger><SelectValue placeholder="To..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {warehouses?.map(w => (
-                                            <SelectItem key={w.id} value={w.id} disabled={w.id === sourceId}>{w.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
-                        <div className="border rounded-md p-4 bg-secondary/20 space-y-4">
-                            <Label>Add Product</Label>
-                            <div className="flex gap-2">
-                                <div className="flex-1 relative">
-                                    <Input
-                                        value={itemSearch}
-                                        onChange={e => { setItemSearch(e.target.value); setSelectedProduct(null); }}
-                                        placeholder="Search product..."
-                                    />
-                                    {itemSearch && !selectedProduct && (
-                                        <div className="absolute z-10 w-full bg-background border rounded-md shadow-md mt-1 max-h-48 overflow-auto">
-                                            {filteredProducts?.map(p => (
-                                                <div key={p.id} className="p-2 hover:bg-muted cursor-pointer text-sm"
-                                                    onClick={() => { setSelectedProduct(p); setItemSearch(p.name); }}>
-                                                    {p.name}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <Input
-                                    type="number"
-                                    className="w-20"
-                                    value={newItemQty}
-                                    onChange={e => setNewItemQty(Number(e.target.value))}
-                                    min={1}
-                                />
-                                <Button onClick={handleAddItem} disabled={!selectedProduct}>Add</Button>
-                            </div>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Select Warehouse</Label>
+                            <Select value={sourceId} onValueChange={setSourceId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Source" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {warehouses?.map(w => (
+                                        <SelectItem key={w.id} value={w.id} disabled={w.id === destId}>
+                                            {w.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
+                {/* Destination */}
+                <Card className="border-l-4 border-l-green-500">
                     <CardHeader>
-                        <CardTitle>Review & Confirm</CardTitle>
+                        <CardTitle>Destination Warehouse</CardTitle>
+                        <CardDescription>Where stock is going TO</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Product</TableHead>
-                                    <TableHead>Qty</TableHead>
-                                    <TableHead></TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {items.map((item, idx) => (
-                                    <TableRow key={idx}>
-                                        <TableCell>{item.name}</TableCell>
-                                        <TableCell>{item.quantity}</TableCell>
-                                        <TableCell>
-                                            <Button variant="ghost" size="sm" onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))}>
-                                                <Trash2 className="h-4 w-4 text-red-500" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {items.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">No items added.</TableCell></TableRow>}
-                            </TableBody>
-                        </Table>
-
-                        <div className="pt-4 flex justify-end">
-                            <Button size="lg" onClick={handleTransfer} disabled={isTransferring || items.length === 0}>
-                                {isTransferring ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <ArrowRightLeft className="mr-2 h-4 w-4" />}
-                                Complete Transfer
-                            </Button>
+                        <div className="space-y-2">
+                            <Label>Select Warehouse</Label>
+                            <Select value={destId} onValueChange={setDestId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Destination" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {warehouses?.map(w => (
+                                        <SelectItem key={w.id} value={w.id} disabled={w.id === sourceId}>
+                                            {w.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Product & Action */}
+            <Card>
+                <CardHeader><CardTitle>Transfer Details</CardTitle></CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <Label>Select Product</Label>
+                            <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Search Product..." />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[300px]">
+                                    {products?.map(p => (
+                                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Quantity to Move</Label>
+                            <Input
+                                type="number"
+                                min="1"
+                                value={quantity}
+                                onChange={(e) => setQuantity(parseInt(e.target.value) || 0)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="pt-4 flex justify-end">
+                        <Button
+                            size="lg"
+                            onClick={handleTransfer}
+                            disabled={!isValid || isSubmitting}
+                            className="w-full md:w-auto min-w-[200px]"
+                        >
+                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ArrowRightLeft className="w-4 h-4 mr-2" />}
+                            Execute Transfer
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }

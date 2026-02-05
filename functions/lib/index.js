@@ -256,17 +256,51 @@ exports.verifyRazorpayPayment = functions.https.onCall(async (data, context) => 
             for (const item of items) {
                 const invRef = db.collection("inventory").doc(item.productId);
                 const invSnap = await transaction.get(invRef);
+                let currentStock = 0;
+                let isNewInventory = false;
                 if (!invSnap.exists) {
-                    throw new Error(`Inventory missing for ${item.name}`);
+                    // Fallback: Check product doc if inventory migration not done
+                    const productRef = db.collection("products").doc(item.productId);
+                    const productSnap = await transaction.get(productRef);
+                    const productData = productSnap.data();
+                    if (productSnap.exists && productData && productData.stock !== undefined) {
+                        const legacyStock = Number(productData.stock);
+                        if (!isNaN(legacyStock)) {
+                            currentStock = legacyStock;
+                            isNewInventory = true;
+                            console.log(`[verifyRazorpayPayment] Auto-migrating inventory for ${item.productId} from product doc. Value: ${legacyStock}`);
+                        }
+                        else {
+                            throw new Error(`Inventory missing and legacy stock invalid for ${item.name}`);
+                        }
+                    }
+                    else {
+                        throw new Error(`Inventory missing for ${item.name}`);
+                    }
                 }
-                const currentStock = ((_a = invSnap.data()) === null || _a === void 0 ? void 0 : _a.stock) || 0;
+                else {
+                    currentStock = ((_a = invSnap.data()) === null || _a === void 0 ? void 0 : _a.stock) || 0;
+                }
                 if (currentStock < item.quantity) {
                     throw new Error(`Insufficient stock for ${item.name}`);
                 }
-                inventoryUpdates.push({ ref: invRef, newStock: currentStock - item.quantity });
+                inventoryUpdates.push({
+                    ref: invRef,
+                    newStock: currentStock - item.quantity,
+                    isNew: isNewInventory,
+                    productId: item.productId
+                });
             }
             for (const update of inventoryUpdates) {
-                transaction.update(update.ref, { stock: update.newStock });
+                if (update.isNew) {
+                    transaction.set(update.ref, {
+                        productId: update.productId,
+                        stock: update.newStock
+                    });
+                }
+                else {
+                    transaction.update(update.ref, { stock: update.newStock });
+                }
             }
             transaction.update(orderRef, {
                 status: "Paid",
@@ -506,6 +540,7 @@ exports.adjustInventory = functions.https.onCall(async (data, context) => {
 exports.onOrderUpdate = functions.firestore
     .document('orders/{orderId}')
     .onUpdate(async (change, context) => {
+    var _a;
     const newData = change.after.data();
     const previousData = change.before.data();
     if (!newData || !previousData)
@@ -513,5 +548,26 @@ exports.onOrderUpdate = functions.firestore
     if (newData.status === previousData.status)
         return;
     console.log(`Order ${context.params.orderId} status changed to ${newData.status}`);
+    const userId = newData.userId;
+    if (!userId)
+        return;
+    try {
+        const userSnap = await admin.firestore().collection('users').doc(userId).get();
+        const fcmToken = (_a = userSnap.data()) === null || _a === void 0 ? void 0 : _a.fcmToken;
+        if (fcmToken) {
+            const message = {
+                notification: {
+                    title: `Order Update: ${newData.status}`,
+                    body: `Your order #${context.params.orderId.slice(0, 8)} is now ${newData.status}.`
+                },
+                token: fcmToken
+            };
+            await admin.messaging().send(message);
+            console.log(`Notification sent to user ${userId}`);
+        }
+    }
+    catch (error) {
+        console.error("Error sending notification:", error);
+    }
 });
 //# sourceMappingURL=index.js.map

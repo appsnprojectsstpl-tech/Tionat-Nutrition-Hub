@@ -1,15 +1,9 @@
 'use client';
 
 import { Progress } from "@/components/ui/progress";
+import Link from "next/link";
 
-// ... inside component ...
-<div className="flex flex-col gap-2 w-full max-w-[200px]">
-    <div className="flex justify-between text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
-        <span>Profile Completion</span>
-        <span>{completionPercent}%</span>
-    </div>
-    <Progress value={completionPercent} className="h-2" />
-</div>
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,7 +45,7 @@ export function ProfileOverview({ userProfile }: ProfileOverviewProps) {
                             <CardDescription className="text-base">{userProfile.email}</CardDescription>
                         </div>
                         <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                            {userProfile.role && userProfile.role !== 'customer' && (
+                            {userProfile.role && userProfile.role !== 'user' && (
                                 <Badge variant="secondary" className="uppercase tracking-wider text-[10px]">
                                     {userProfile.role.replace('_', ' ')}
                                 </Badge>

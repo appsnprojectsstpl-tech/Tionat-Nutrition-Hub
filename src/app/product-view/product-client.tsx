@@ -66,23 +66,32 @@ export function ProductClient({ initialProduct }: ProductClientProps) {
                         return;
                     }
                     const pDoc = querySnapshot.docs[0];
-                    productData = { id: pDoc.id, ...pDoc.data(), stock: 0 } as Product & { stock: number };
+                    productData = { id: pDoc.id, ...pDoc.data(), stock: pDoc.data().stock || 0 } as Product & { stock: number };
                 }
 
                 // --- WAREHOUSE STOCK LOGIC ---
                 // Always check stock on client because it depends on selectedWarehouse context
                 if (selectedWarehouse && productData) {
                     try {
-                        const invDocRef = doc(firestore, 'warehouse_inventory', `${selectedWarehouse.id}_${productData.id}`);
+                        const invDocId = `${selectedWarehouse.id}_${productData.id}`;
+                        const invDocRef = doc(firestore, 'warehouse_inventory', invDocId);
                         const invSnap = await getDoc(invDocRef);
+
                         if (invSnap.exists()) {
+                            // Found specific warehouse stock
                             productData = { ...productData, stock: invSnap.data().stock };
                         } else {
+                            // Warehouse selected but no inventory record found -> Default to 0 for this location
                             productData = { ...productData, stock: 0 };
                         }
                     } catch (err) {
-                        console.error("Failed to fetch local stock", err);
+                        console.error("[ProductClient] Failed to fetch local stock", err);
                     }
+                } else if (productData) {
+                    // No warehouse selected, use global stock from product document
+                    // Ensure we fallback to the global stock field, defaulting to 0 only if that's missing
+                    const globalStock = (productData as any).stock !== undefined ? (productData as any).stock : 0;
+                    productData = { ...productData, stock: globalStock };
                 }
                 // -----------------------------
 
@@ -102,13 +111,31 @@ export function ProductClient({ initialProduct }: ProductClientProps) {
     const [isCartAnimating, setIsCartAnimating] = useState(false);
 
     const handleAddToCart = () => {
-        if (product) {
+        if (product && selectedWarehouse) {
             setIsCartAnimating(true);
             setTimeout(() => setIsCartAnimating(false), 400);
-            addToCart(product, quantity);
+            addToCart(product, quantity, selectedWarehouse.id);
             toast({
                 title: "Added to cart",
-                description: `${quantity} x ${product.name} has been added to your cart.`,
+                description: (
+                    <div className="flex items-center gap-3 mt-1">
+                        {product.imageUrl && (
+                            <div className="relative w-10 h-10 rounded overflow-hidden flex-shrink-0 border border-border">
+                                <img src={product.imageUrl} alt={product.name} className="object-cover w-full h-full" />
+                            </div>
+                        )}
+                        <div className="flex flex-col">
+                            <span className="font-semibold line-clamp-1 text-sm">{product.name}</span>
+                            <span className="text-xs text-muted-foreground">{quantity} x ₹{product.price}</span>
+                        </div>
+                    </div>
+                ),
+            });
+        } else if (!selectedWarehouse) {
+            toast({
+                title: "Location Required",
+                description: "Please set your location to check availability.",
+                variant: "destructive"
             });
         }
     };
@@ -209,23 +236,35 @@ export function ProductClient({ initialProduct }: ProductClientProps) {
                                     <Plus className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <Button size="lg" disabled={product.status === 'Coming Soon' || product.stock <= 0} onClick={handleAddToCart} className={cn(
+                            <Button size="lg" disabled={!selectedWarehouse || product.status === 'Coming Soon' || product.stock <= 0} onClick={handleAddToCart} className={cn(
                                 "flex-1 rounded-xl font-bold shadow-lg shadow-primary/20 text-base transition-all",
                                 isCartAnimating && "animate-cart-bounce",
-                                product.stock <= 0 && "bg-muted text-muted-foreground shadow-none"
+                                (!selectedWarehouse || product.stock <= 0) && "bg-muted text-muted-foreground shadow-none"
                             )}>
-                                {product.status === 'Coming Soon' ? 'Coming Soon' : product.stock <= 0 ? 'Out of Stock' : `Add item - ₹${(product.price * quantity).toFixed(2)}`}
+                                {!selectedWarehouse
+                                    ? 'Set Location'
+                                    : product.status === 'Coming Soon'
+                                        ? 'Coming Soon'
+                                        : product.stock <= 0
+                                            ? 'Out of Stock'
+                                            : `Add item - ₹${(product.price * quantity).toFixed(2)}`
+                                }
                             </Button>
                         </div>
-                        {product.stock > 0 && product.stock < 10 && (
+                        {selectedWarehouse && product.stock > 0 && product.stock < 10 && (
                             <div className="flex items-center gap-2 mt-2 justify-center md:justify-start">
                                 <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
                                 <p className="text-xs text-red-600 font-bold">Hurry! Only {product.stock} left in stock.</p>
                             </div>
                         )}
-                        {product.stock <= 0 && selectedWarehouse && (
+                        {selectedWarehouse && product.stock <= 0 && (
                             <p className="text-xs text-muted-foreground text-center mt-2 md:text-left">
                                 Currently unavailable at <strong>{selectedWarehouse.name}</strong>.
+                            </p>
+                        )}
+                        {!selectedWarehouse && (
+                            <p className="text-xs text-muted-foreground text-center mt-2 md:text-left">
+                                Please set your address to check stock.
                             </p>
                         )}
                     </div>
@@ -233,19 +272,24 @@ export function ProductClient({ initialProduct }: ProductClientProps) {
             </div>
 
 
+
+
+
             <div className="mt-12">
                 <ProductReviews productId={product.id} />
             </div>
 
-            {product && (
-                <RelatedProducts
-                    categoryId={product.categoryId}
-                    currentProductId={product.id}
-                    subcategoryId={product.subcategoryId}
-                    currentPrice={product.price}
-                    currentName={product.name}
-                />
-            )}
-        </div>
+            {
+                product && (
+                    <RelatedProducts
+                        categoryId={product.categoryId}
+                        currentProductId={product.id}
+                        subcategoryId={product.subcategoryId}
+                        currentPrice={product.price}
+                        currentName={product.name}
+                    />
+                )
+            }
+        </div >
     );
 }

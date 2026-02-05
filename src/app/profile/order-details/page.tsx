@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { RefundTracker } from "@/components/order/refund-tracker";
 import { generateInvoice } from "@/lib/invoice-generator";
 import { useCart } from "@/hooks/use-cart";
+import { useWarehouse } from '@/context/warehouse-context';
 
 // Helper Component for Returns
 function ReturnDialog({ order, orderRef, rootOrderRef }: { order: Order, orderRef: any, rootOrderRef: any }) {
@@ -127,6 +128,7 @@ function OrderDetailsContent() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const { addToCart } = useCart();
+    const { selectedWarehouse } = useWarehouse();
     const [isCancelling, setIsCancelling] = useState(false);
 
     const orderRef = useMemoFirebase(
@@ -135,8 +137,8 @@ function OrderDetailsContent() {
     );
 
     const rootOrderRef = useMemoFirebase(
-        () => (firestore && orderId ? doc(firestore, 'orders', orderId) : null),
-        [firestore, orderId]
+        () => (firestore && user && orderId ? doc(firestore, 'orders', orderId) : null),
+        [firestore, user, orderId]
     );
 
     const { data: order, isLoading } = useDoc<Order>(orderRef);
@@ -242,8 +244,15 @@ function OrderDetailsContent() {
                             {order.invoiceNumber && (
                                 <>
                                     <Button variant="outline" onClick={() => {
+                                        if (!selectedWarehouse) {
+                                            toast({ title: "Location Required", description: "Please select a delivery location first.", variant: "destructive" });
+                                            return;
+                                        }
                                         if (order.orderItems) {
-                                            order.orderItems.forEach(item => addToCart({ id: item.productId, ...item } as any, item.quantity));
+                                            // Add items one by one. Logic in addToCart will handle clearing if needed.
+                                            // Ideally, we should batch clear first?
+                                            // Since addToCart clears on mismatch, the first item will clear. Subsequent items (same WH) will append.
+                                            order.orderItems.forEach(item => addToCart({ id: item.productId, ...item } as any, item.quantity, selectedWarehouse.id));
                                             router.push('/cart');
                                         }
                                     }}>

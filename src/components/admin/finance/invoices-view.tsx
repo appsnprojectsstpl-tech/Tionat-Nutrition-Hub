@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, Download } from "lucide-react";
 import { format } from 'date-fns';
+import { toDate } from '@/lib/date-utils';
 
 export function InvoicesView() {
     const firestore = useFirestore();
@@ -85,7 +86,7 @@ export function InvoicesView() {
                                         {order.invoiceNumber || <span className="text-muted-foreground italic">Pending</span>}
                                     </TableCell>
                                     <TableCell className="text-xs">
-                                        {order.orderDate?.toDate ? format(order.orderDate.toDate(), 'PP') : 'N/A'}
+                                        {order.orderDate ? format(toDate(order.orderDate), 'PP') : 'N/A'}
                                     </TableCell>
                                     <TableCell className="text-xs text-muted-foreground">{order.id.slice(0, 8)}...</TableCell>
                                     <TableCell className="text-sm">{order.shippingAddress?.name}</TableCell>

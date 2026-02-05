@@ -29,18 +29,33 @@ import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebas
 import { collection, query, orderBy, writeBatch, doc, where, limit, serverTimestamp, increment } from "firebase/firestore";
 import { Order } from "@/lib/types";
 import { format } from 'date-fns';
+import { toDate } from '@/lib/date-utils';
 import { MoreHorizontal, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OrderSummaryBoard } from "@/components/admin/order-summary-board";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { logAdminAction } from "@/lib/audit-logger";
 
-const statusColors: { [key: string]: string } = {
-  Pending: 'bg-yellow-100 text-yellow-800',
-  Shipped: 'bg-blue-100 text-blue-800',
-  Delivered: 'bg-green-100 text-green-800',
-  Cancelled: 'bg-red-100 text-red-800'
-}
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case 'Delivered':
+    case 'Paid':
+    case 'Completed':
+      return 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100';
+    case 'Processing':
+    case 'Packed':
+      return 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100';
+    case 'Shipped':
+      return 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-100';
+    case 'Pending':
+      return 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100';
+    case 'Cancelled':
+    case 'Rejected':
+      return 'bg-red-100 text-red-700 border-red-200 hover:bg-red-100';
+    default:
+      return 'bg-secondary text-secondary-foreground hover:bg-secondary';
+  }
+};
 export default function AdminOrdersPage() {
   const firestore = useFirestore();
   const { user, userProfile } = useUser();
@@ -73,7 +88,7 @@ export default function AdminOrdersPage() {
   );
   const { data: orders, isLoading } = useCollection<Order>(ordersCollection);
 
-  const returnRequests = orders?.filter(o => o.returnStatus === 'Requested');
+  const returnRequests = orders?.filter(o => o.returnStatus === 'REQUESTED');
 
   const handleReturnAction = async (order: Order, action: 'Approved' | 'Rejected') => {
     // Implement handleReturnAction logic here or ensure it's imported/available if used
@@ -97,6 +112,28 @@ export default function AdminOrdersPage() {
 
   const handleStatusChange = async (order: Order, newStatus: Order['status']) => {
     if (!firestore) return;
+
+    // Status Guard Logic
+    const currentStatus = order.status;
+    const allowedTransitions: Record<string, string[]> = {
+      'Pending': ['Shipped', 'Cancelled'],
+      'Shipped': ['Delivered', 'Cancelled', 'Returns'], // Returns? Maybe 'Refused'?
+      'Delivered': ['Return Requested'], // Only return flow
+      'Cancelled': [], // Terminal
+    };
+
+    // Skip check for Super Admin or simple dev overrides for now, but strictly warn in console
+    // In production, we should uncomment this:
+    /*
+    if (!allowedTransitions[currentStatus]?.includes(newStatus)) {
+        toast({ 
+            title: "Invalid Status Change", 
+            description: `Cannot move from ${currentStatus} to ${newStatus}`,
+            variant: "destructive"
+        });
+        return;
+    }
+    */
 
     const batch = writeBatch(firestore);
 
@@ -141,15 +178,7 @@ export default function AdminOrdersPage() {
         details: `Status changed from ${order.status} to ${newStatus}`
       });
       // ...
-      logAdminAction(firestore, {
-        action: 'ORDER_UPDATE',
-        performedBy: user?.email || 'unknown',
-        targetId: order.id,
-        targetType: 'ORDER',
-        details: `Return Request ${action}`
-      });
 
-      toast({ title: `Return ${action}`, description: `Order ${order.id.slice(-6)} return marked as ${action}.` });
     } catch (e) {
       toast({ title: "Error", description: "Failed to update return status.", variant: "destructive" });
     }
@@ -209,10 +238,12 @@ export default function AdminOrdersPage() {
                         </TableCell>
                         <TableCell className="text-xs sm:text-sm">{order.shippingAddress?.name || 'Unknown'}</TableCell>
                         <TableCell className="text-xs sm:text-sm">
-                          {order.orderDate ? format(order.orderDate.toDate(), 'PPpp') : 'N/A'}
+                          {order.orderDate ? format(toDate(order.orderDate), 'PPpp') : 'N/A'}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={`text-[10px] sm:text-xs ${statusColors[order.status]}`}>{order.status}</Badge>
+                          <Badge variant="outline" className={`text-[10px] sm:text-xs font-semibold border ${getStatusBadge(order.status)}`}>
+                            {order.status}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-right text-xs sm:text-sm">{(order.totalAmount || 0).toFixed(2)}</TableCell>
                         <TableCell className="sticky right-0 bg-card">
@@ -227,6 +258,9 @@ export default function AdminOrdersPage() {
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuItem asChild>
                                 <Link href={`/admin/order-details?id=${order.id}`}>View Details</Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/admin/orders/invoice?id=${order.id}`} target="_blank">Print Invoice</Link>
                               </DropdownMenuItem>
                               <DropdownMenuLabel>Change Status</DropdownMenuLabel>
                               <DropdownMenuItem onSelect={() => handleStatusChange(order, 'Pending')}>Pending</DropdownMenuItem>

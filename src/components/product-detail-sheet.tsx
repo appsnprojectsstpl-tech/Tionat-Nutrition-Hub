@@ -5,15 +5,13 @@ import { Product } from '@/lib/types';
 import {
     Sheet,
     SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription,
-    SheetFooter
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCart } from '@/hooks/use-cart';
+import { useWarehouse } from '@/context/warehouse-context';
 import { Minus, Plus, Star } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface ProductDetailSheetProps {
     product: Product | null;
@@ -23,15 +21,29 @@ interface ProductDetailSheetProps {
 
 export function ProductDetailSheet({ product, open, onOpenChange }: ProductDetailSheetProps) {
     const { addToCart, items, updateQuantity } = useCart();
+    const { selectedWarehouse } = useWarehouse();
+    const { toast } = useToast();
 
     if (!product) return null;
 
     const cartItem = items.find(item => item.product.id === product.id);
 
+    const handleAddToCart = () => {
+        if (!selectedWarehouse) {
+            toast({
+                title: "Location Required",
+                description: "Please select a delivery location to satisfy your hunger!",
+                variant: "destructive"
+            });
+            return;
+        }
+        // Pass warehouseId strictly
+        addToCart(product, 1, selectedWarehouse.id);
+    };
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="bottom" className="h-[85vh] rounded-t-[2rem] p-0 overflow-hidden flex flex-col bg-background">
-
                 {/* Scrollable Content */}
                 <div className="flex-1 overflow-y-auto">
                     {/* Hero Image */}
@@ -43,7 +55,7 @@ export function ProductDetailSheet({ product, open, onOpenChange }: ProductDetai
                         )}
                         <div className="absolute top-4 left-4">
                             <Badge variant="secondary" className="backdrop-blur-md bg-white/50 text-black">
-                                {product.category}
+                                {product.categoryId}
                             </Badge>
                         </div>
                     </div>
@@ -95,8 +107,12 @@ export function ProductDetailSheet({ product, open, onOpenChange }: ProductDetai
 
                 {/* Sticky Bottom Action */}
                 <div className="p-4 border-t border-border/50 bg-background/80 backdrop-blur-md pb-safe">
-                    {!cartItem ? (
-                        <Button className="w-full h-12 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all bg-accent text-accent-foreground" onClick={() => addToCart(product)}>
+                    {!selectedWarehouse ? (
+                        <Button disabled className="w-full h-12 rounded-2xl font-bold text-lg">
+                            Select Location First
+                        </Button>
+                    ) : !cartItem ? (
+                        <Button className="w-full h-12 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all bg-accent text-accent-foreground" onClick={handleAddToCart}>
                             Add to Cart - ₹{product.price}
                         </Button>
                     ) : (

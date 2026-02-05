@@ -163,8 +163,32 @@ export default function AdminUsersPage() {
     }
   }
 
+  const handleBanUser = async (user: UserProfile) => {
+    if (!firestore) return;
+    const isBanning = !user.isDeleted;
+    const action = isBanning ? 'Ban' : 'Restore';
+
+    if (confirm(`Are you sure you want to ${action} ${user.firstName}? ${isBanning ? 'They will not be able to login.' : 'Access will be restored.'}`)) {
+      const userRef = doc(firestore, 'users', user.id);
+      await setDocumentNonBlocking(userRef, { isDeleted: isBanning, deletedAt: isBanning ? new Date().toISOString() : null }, { merge: true });
+
+      logAdminAction(firestore, {
+        action: 'USER_ROLE_UPDATE',
+        performedBy: auth?.currentUser?.email || 'unknown',
+        targetId: user.id,
+        targetType: 'USER',
+        details: `${action}ned user ${user.email}`
+      });
+
+      toast({
+        title: `User ${action}ned`,
+        description: `${user.firstName} has been ${isBanning ? 'banned' : 'restored'}.`
+      });
+    }
+  };
+
   const admins = users?.filter(u => u.role === 'superadmin' || u.role === 'warehouse_admin' || u.role === 'admin') || [];
-  const customers = users?.filter(u => !u.role || u.role === 'user') || [];
+  const customers = users?.filter((u: UserProfile) => !u.role || u.role === 'user') || [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -187,7 +211,7 @@ export default function AdminUsersPage() {
               <CardDescription>View and manage registered customers.</CardDescription>
             </CardHeader>
             <CardContent>
-              <UsersTable users={customers} isLoading={isLoading} warehouses={warehouses} roleColors={roleColors} roleIcons={roleIcons} handlePasswordReset={handlePasswordReset} handleRoleChange={handleRoleChange} />
+              <UsersTable users={customers} isLoading={isLoading} warehouses={warehouses} roleColors={roleColors} roleIcons={roleIcons} handlePasswordReset={handlePasswordReset} handleRoleChange={handleRoleChange} handleBanUser={handleBanUser} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -199,7 +223,7 @@ export default function AdminUsersPage() {
               <CardDescription>Manage platform administrators and warehouse managers.</CardDescription>
             </CardHeader>
             <CardContent>
-              <UsersTable users={admins} isLoading={isLoading} warehouses={warehouses} roleColors={roleColors} roleIcons={roleIcons} handlePasswordReset={handlePasswordReset} handleRoleChange={handleRoleChange} />
+              <UsersTable users={admins} isLoading={isLoading} warehouses={warehouses} roleColors={roleColors} roleIcons={roleIcons} handlePasswordReset={handlePasswordReset} handleRoleChange={handleRoleChange} handleBanUser={handleBanUser} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -248,7 +272,7 @@ export default function AdminUsersPage() {
 }
 
 // Helper Component to avoid duplication
-function UsersTable({ users, isLoading, warehouses, roleColors, roleIcons, handlePasswordReset, handleRoleChange }: any) {
+function UsersTable({ users, isLoading, warehouses, roleColors, roleIcons, handlePasswordReset, handleRoleChange, handleBanUser }: any) {
   return (
     <Table>
       <TableHeader>
@@ -290,6 +314,14 @@ function UsersTable({ users, isLoading, warehouses, roleColors, roleIcons, handl
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>Actions for {userItem.firstName}</DropdownMenuLabel>
                     <DropdownMenuItem onSelect={() => handlePasswordReset(userItem)}>Reset Password</DropdownMenuItem>
+
+                    <DropdownMenuItem
+                      onSelect={() => handleBanUser(userItem)}
+                      className={userItem.isDeleted ? "text-green-600 focus:text-green-600" : "text-destructive focus:text-destructive"}
+                    >
+                      {userItem.isDeleted ? "Restore Access" : "Ban User"}
+                    </DropdownMenuItem>
+
                     {userItem.role !== 'admin' && (
                       <DropdownMenuItem onSelect={() => handleRoleChange(userItem, 'admin')}>Promote to Global Admin</DropdownMenuItem>
                     )}

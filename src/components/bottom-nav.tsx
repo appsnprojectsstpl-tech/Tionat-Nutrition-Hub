@@ -25,7 +25,7 @@ export function BottomNav() {
     }, []);
 
     return (
-        <div className="fixed bottom-0 left-0 z-50 w-full bg-background/80 backdrop-blur-xl border-t border-white/10 dark:border-white/5 pb-safe supports-[backdrop-filter]:bg-background/60">
+        <div className="fixed bottom-0 left-0 z-50 w-full bg-background border-t border-border/10 pb-safe">
             <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-1">
                 {navLinks.map((link) => {
                     const isActive = link.href === "/"

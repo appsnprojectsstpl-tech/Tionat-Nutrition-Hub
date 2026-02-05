@@ -77,11 +77,16 @@ export default function ProfileContent() {
         <div className="min-h-screen bg-background py-8 px-4 sm:px-6 lg:px-8">
             <main className="max-w-6xl mx-auto">
                 {userProfile && (
-                    <CustomerHub
-                        userProfile={userProfile}
-                        orders={orders || []}
-                        isLoadingOrders={isLoadingOrders}
-                    />
+                    <>
+                        <CustomerHub
+                            userProfile={userProfile}
+                            orders={orders || []}
+                            isLoadingOrders={isLoadingOrders}
+                        />
+
+                        {/* Developer Tools for Testing Role-Based Access */}
+                        {/* Developer Tools removed */}
+                    </>
                 )}
             </main>
         </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useFirestore, useAuth } from '@/firebase'; // Added useAuth
 import { logAdminAction } from "@/lib/audit-logger"; // Added Logger
-import { collection, query, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, setDoc, deleteDoc, where, limit } from 'firebase/firestore';
 import { Warehouse } from '@/lib/types';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -117,7 +117,7 @@ export default function WarehousesPage() {
 
             await setDoc(doc(firestore, 'warehouses', id), warehouseData, { merge: true });
 
-            logAdminAction({
+            logAdminAction(firestore, {
                 action: 'WAREHOUSE_UPDATE',
                 performedBy: user?.email || 'unknown',
                 targetId: id,
@@ -125,7 +125,7 @@ export default function WarehousesPage() {
                 details: editingWarehouse ? `Updated warehouse ${formData.name}` : `Created warehouse ${formData.name}`
             });
             // ...
-            logAdminAction({
+            logAdminAction(firestore, {
                 action: 'WAREHOUSE_UPDATE',
                 performedBy: user?.email || 'unknown',
                 targetId: id,
@@ -169,6 +169,58 @@ export default function WarehousesPage() {
 
     const removePincode = (code: string) => {
         setFormData(prev => ({ ...prev, serviceablePincodes: prev.serviceablePincodes?.filter(p => p !== code) }));
+    };
+
+    const handleDelete = async (warehouseId: string) => {
+        if (!firestore) return;
+
+        // 1. Check for Active Orders
+        const ordersRef = collection(firestore, 'orders');
+        const activeOrdersQuery = query(ordersRef, where('warehouseId', '==', warehouseId), where('status', 'in', ['Pending', 'Processing', 'Packed', 'Shipped']), limit(1));
+        const activeOrdersSnap = await getDocs(activeOrdersQuery);
+
+        if (!activeOrdersSnap.empty) {
+            toast({
+                title: "Cannot Delete",
+                description: "Warehouse has active orders. Please fulfill or cancel them first.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        // 2. Check for Stock (Inventory)
+        const inventoryRef = collection(firestore, 'warehouse_inventory');
+        const stockQuery = query(inventoryRef, where('warehouseId', '==', warehouseId), where('stock', '>', 0), limit(1));
+        const stockSnap = await getDocs(stockQuery);
+
+        if (!stockSnap.empty) {
+            toast({
+                title: "Cannot Delete",
+                description: "Warehouse still has stock. Please zero out inventory first.",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        if (!confirm("Are you sure you want to delete this warehouse? This action is permanent and cannot be undone.")) return;
+
+        try {
+            await deleteDoc(doc(firestore, 'warehouses', warehouseId));
+
+            logAdminAction(firestore, {
+                action: 'WAREHOUSE_UPDATE',
+                performedBy: user?.email || 'unknown',
+                targetId: warehouseId,
+                targetType: 'WAREHOUSE',
+                details: 'Deleted warehouse',
+                status: 'SUCCESS'
+            });
+
+            toast({ title: "Deleted", description: "Warehouse deleted successfully." });
+            fetchWarehouses();
+        } catch (error) {
+            toast({ title: "Error", description: "Failed to delete warehouse.", variant: "destructive" });
+        }
     };
 
     return (

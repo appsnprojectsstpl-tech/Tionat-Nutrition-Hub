@@ -10,6 +10,9 @@ import { MapPin, AlertCircle } from 'lucide-react';
 
 export function PincodeGuard() {
     const [isOpen, setIsOpen] = useState(false);
+    const { userProfile } = useUser();
+    const { selectedWarehouse, checkPincode, isLoading: isWarehouseLoading } = useWarehouse();
+    const [pincode, setPincode] = useState('');
 
     // User requested to DISABLE the popup.
     // We return null immediately.
@@ -23,18 +26,17 @@ export function PincodeGuard() {
     const [isChecking, setIsChecking] = useState(false);
 
     useEffect(() => {
-        // Super Admins see everything, no guard needed
         if (userProfile?.role === 'superadmin') {
             setIsOpen(false);
             return;
         }
 
-        if (!isLoading && !selectedWarehouse) {
+        if (!isWarehouseLoading && !selectedWarehouse) {
             setIsOpen(true);
         } else {
             setIsOpen(false);
         }
-    }, [isLoading, selectedWarehouse, userProfile]);
+    }, [isWarehouseLoading, selectedWarehouse, userProfile]);
 
     const handleCheck = async () => {
         if (pincode.length !== 6) {
@@ -63,7 +65,7 @@ export function PincodeGuard() {
     if (selectedWarehouse) return null;
 
     // While loading context, show nothing to avoid flash
-    if (isLoading) return null;
+    if (isWarehouseLoading) return null;
 
     return (
         <Dialog open={isOpen} onOpenChange={() => { }}>

@@ -25,6 +25,9 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Search, SlidersHorizontal, AlertTriangle } from "lucide-react";
 import { WarehouseStockManager } from "@/components/admin/warehouse-stock-manager";
 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AuditLogViewer } from "@/components/admin/audit-log-viewer";
+
 export function InventoryView() {
     const { userProfile, isUserLoading } = useUser();
     const firestore = useFirestore();
@@ -100,89 +103,112 @@ export function InventoryView() {
                 </p>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Products & Stock</CardTitle>
-                    <CardDescription>
-                        Update stock levels for your warehouse.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="relative flex-1 max-w-sm">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search products..."
-                                className="pl-8"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
-                    </div>
+            <Tabs defaultValue="stock" className="w-full">
+                <TabsList className="grid w-full max-w-[400px] grid-cols-2">
+                    <TabsTrigger value="stock">Stock Levels</TabsTrigger>
+                    <TabsTrigger value="history">History Log</TabsTrigger>
+                </TabsList>
 
-                    <div className="border rounded-md">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-[80px]">Image</TableHead>
-                                    <TableHead>Product Name</TableHead>
-                                    <TableHead>Category</TableHead>
-                                    <TableHead>Catalog Status</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredProducts.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
-                                            No products found matching your search.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    filteredProducts.map((product) => (
-                                        <TableRow key={product.id}>
-                                            <TableCell>
-                                                {product.imageUrl ? (
-                                                    <img
-                                                        src={product.imageUrl}
-                                                        alt={product.name}
-                                                        className="h-10 w-10 object-cover rounded-md border"
-                                                    />
-                                                ) : (
-                                                    <div className="h-10 w-10 bg-muted rounded-md flex items-center justify-center text-xs text-muted-foreground">
-                                                        Img
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="font-medium">{product.name}</TableCell>
-                                            <TableCell>
-                                                <span className="text-xs text-muted-foreground font-mono">
-                                                    {product.categoryId}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant={product.status === 'Available' ? 'outline' : 'secondary'}>
-                                                    {product.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button
-                                                    size="sm"
-                                                    variant="secondary"
-                                                    onClick={() => handleOpenStockManager(product)}
-                                                >
-                                                    <SlidersHorizontal className="h-4 w-4 mr-2" />
-                                                    Manage Stock
-                                                </Button>
-                                            </TableCell>
+                <TabsContent value="stock">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Products & Stock</CardTitle>
+                            <CardDescription>
+                                Update stock levels for your warehouse.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="relative flex-1 max-w-sm">
+                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search products..."
+                                        className="pl-8"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="border rounded-md">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-[80px]">Image</TableHead>
+                                            <TableHead>Product Name</TableHead>
+                                            <TableHead>Category</TableHead>
+                                            <TableHead>Catalog Status</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredProducts.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                                                    No products found matching your search.
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            filteredProducts.map((product) => (
+                                                <TableRow key={product.id}>
+                                                    <TableCell>
+                                                        {product.imageUrl ? (
+                                                            <img
+                                                                src={product.imageUrl}
+                                                                alt={product.name}
+                                                                className="h-10 w-10 object-cover rounded-md border"
+                                                            />
+                                                        ) : (
+                                                            <div className="h-10 w-10 bg-muted rounded-md flex items-center justify-center text-xs text-muted-foreground">
+                                                                Img
+                                                            </div>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="font-medium">{product.name}</TableCell>
+                                                    <TableCell>
+                                                        <span className="text-xs text-muted-foreground font-mono">
+                                                            {product.categoryId}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={product.status === 'Available' ? 'outline' : 'secondary'}>
+                                                            {product.status}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="secondary"
+                                                            onClick={() => handleOpenStockManager(product)}
+                                                        >
+                                                            <SlidersHorizontal className="h-4 w-4 mr-2" />
+                                                            Manage Stock
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="history">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Inventory History</CardTitle>
+                            <CardDescription>
+                                Recent stock movements and adjustments.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <AuditLogViewer collectionName="inventory_logs" />
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
 
             {selectedProduct && warehouses && (
                 <WarehouseStockManager

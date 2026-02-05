@@ -6,6 +6,7 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { LogOut, Download, ShieldAlert, Moon, Sun, Monitor } from "lucide-react";
+import { AppUpdateCard } from "./app-update-card";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -324,24 +325,10 @@ export function SettingsTab({ userProfile }: SettingsTabProps) {
                 </CardContent>
             </Card>
 
-            {/* Active Session */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="font-headline">Active Session</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center gap-4">
-                        <div className="bg-green-100 p-3 rounded-full">
-                            <Monitor className="h-6 w-6 text-green-700" />
-                        </div>
-                        <div>
-                            <p className="font-medium">Current Device</p>
-                            <p className="text-sm text-muted-foreground">Active Now • Bangalore, IN</p>
-                            <p className="text-xs text-muted-foreground mt-1 text-green-600 font-semibold">Secure Connection</p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+            {/* Active Session Removed */}
+
+            {/* App Updates */}
+            <AppUpdateCard />
 
             {/* Data & Actions */}
             <Card>

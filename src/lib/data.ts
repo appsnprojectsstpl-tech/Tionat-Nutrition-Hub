@@ -2,10 +2,10 @@
 import type { Product, Category, SubCategory, UserProfile, RewardHistory } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
-export const categories: Omit<Category, 'id'>[] = [
-  { name: 'Nutritional Care', status: 'Active' },
-  { name: 'Health Care', status: 'Coming Soon' },
-  { name: 'Personal Care', status: 'Coming Soon' },
+export const categories: Category[] = [
+  { name: 'Nutritional Care', status: 'Active' as const },
+  { name: 'Health Care', status: 'Coming Soon' as const },
+  { name: 'Personal Care', status: 'Coming Soon' as const },
 ].map((c, i) => ({ ...c, id: `cat-${i + 1}` }));
 
 
@@ -59,7 +59,7 @@ export const products: Omit<Product, 'id' | 'categoryId' | 'slug' | 'description
   { name: 'Suhar', price: 100, category: 'Health Care', subcategoryId: 'sub-1', status: 'Coming Soon', imageUrl: IMAGES.snack_mix },
   { name: 'Tomato Mix', price: 105, category: 'Nutritional Care', subcategoryId: 'sub-1', status: 'Available', imageUrl: IMAGES.rice_tomato },
   { name: 'Tomato Rice', price: 105, category: 'Nutritional Care', subcategoryId: 'sub-3', status: 'Available', imageUrl: IMAGES.rice_tomato },
-].map((p, i) => ({ ...p, id: `prod-${i + 1}` }));
+].map((p, i) => ({ ...p, id: `prod-${i + 1}` } as any));
 
 
 export const rewardHistory: RewardHistory[] = [
@@ -79,6 +79,4 @@ export const mockUser: UserProfile = {
 };
 
 // This is no longer used for the main cart, but can be kept for reference or other mockups
-export const cartItems = [
-  // This is now handled by the useCart hook and localStorage
-].filter(item => item.product);
+export const cartItems: any[] = [];

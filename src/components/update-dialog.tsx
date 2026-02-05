@@ -57,10 +57,11 @@ export function UpdateDialog({
                     <AlertDialogDescription className="text-sm">
                         {forceUpdate ? (
                             <span className="text-destructive font-medium">
-                                This update is required to continue using the app.
+                                <span className="block mb-1">This update is required to continue.</span>
+                                Download the latest APK to proceed.
                             </span>
                         ) : (
-                            'A new version is now available with improvements and bug fixes.'
+                            'A new version is available! Download the APK directly to get the latest features.'
                         )}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -81,7 +82,7 @@ export function UpdateDialog({
                         className="bg-primary hover:bg-primary/90 gap-2"
                     >
                         <ExternalLink className="h-4 w-4" />
-                        Update Now
+                        Download Update
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>

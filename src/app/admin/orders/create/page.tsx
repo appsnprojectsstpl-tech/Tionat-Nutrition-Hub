@@ -220,6 +220,7 @@ export default function CreateOrderPage() {
                 action: 'ORDER_CREATE',
                 targetType: 'ORDER',
                 targetId: 'new',
+                performedBy: user?.email || 'unknown',
                 details: `Created manual order for ${isGuest ? guestForm.getValues().name : selectedUser?.firstName} - Amount: ${totalAmount}`
             });
 

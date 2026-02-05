@@ -1,14 +1,13 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { Product, CartItem, Coupon } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth, useFirestore } from '@/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (product: Product, quantity?: number) => void;
+  addToCart: (product: Product, quantity: number, warehouseId: string) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
@@ -20,6 +19,8 @@ interface CartContextType {
   removeCoupon: () => void;
   discountAmount: number;
   total: number;
+  tip: number;
+  setTip: (amount: number) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -72,154 +73,127 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     if (subtotal < coupon.minOrderValue) {
       discountAmount = 0;
     } else {
-      if (coupon.type === 'percentage') {
+      if (coupon.discountType === 'PERCENTAGE') {
         let eligibleAmount = subtotal;
         if (coupon.applicableCategoryId && coupon.applicableCategoryId !== 'all') {
           eligibleAmount = items
-            .filter(item => item.product.category === coupon.applicableCategoryId)
+            // @ts-ignore - categoryId check
+            .filter(item => item.product.categoryId === coupon.applicableCategoryId || item.product.category === coupon.applicableCategoryId)
             .reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
         }
-        const calculated = (eligibleAmount * coupon.value) / 100;
+        const calculated = (eligibleAmount * coupon.discountValue) / 100;
         discountAmount = coupon.maxDiscount ? Math.min(calculated, coupon.maxDiscount) : calculated;
       } else {
-        discountAmount = coupon.value;
+        discountAmount = coupon.discountValue;
       }
     }
   }
 
-  // Ensure total isn't negative
-  const total = Math.max(0, subtotal - discountAmount);
+  // Tip Support
+  const [tip, setTip] = useState<number>(0);
 
-
-
-  // Persist cart to Firestore for logged-in users
-  useEffect(() => {
-    if (!user || !firestore) return;
-
-    // Debounce to avoid too many writes
-    const timeoutId = setTimeout(async () => {
-      try {
-        const cartRef = doc(firestore, 'active_carts', user.uid);
-        if (items.length > 0) {
-          await setDoc(cartRef, {
-            userId: user.uid,
-            email: user.email,
-            items: items,
-            subtotal: subtotal, // Calculated from items
-            lastUpdated: serverTimestamp(),
-            status: 'active'
-          }, { merge: true });
-        } else {
-          // Optional: Delete or mark empty. Let's mark empty? 
-          // actually good to keep for analytics, but for "abandoned" we check items > 0
-          await setDoc(cartRef, { items: [], lastUpdated: serverTimestamp(), status: 'empty' }, { merge: true });
-        }
-      } catch (e) {
-        console.error("Failed to sync cart", e);
-      }
-    }, 2000); // 2 second debounce
-
-    return () => clearTimeout(timeoutId);
-  }, [items, user, firestore, subtotal]);
-
-  // Persist coupon
+  // Persist tip to local storage (optional but good for UX)
   useEffect(() => {
     if (!isBrowser) return;
     try {
-      if (coupon) {
-        window.localStorage.setItem('coupon', JSON.stringify(coupon));
-      } else {
-        window.localStorage.removeItem('coupon');
-      }
-    } catch (error) { }
-  }, [coupon]);
+      // Reset tip if cart is cleared is handled in clearCart
+    } catch { }
+  }, [tip]);
 
-  // Clear cart on logout
-  useEffect(() => {
-    if (!isUserLoading && !user) {
-      // Optional: Decide if cart should stick around for guest. 
-      // Current logic cleared it, let's keep it consistent.
-      // setItems([]); 
-      // setCoupon(null);
-    }
-  }, [user, isUserLoading]);
+  const total = Math.max(0, subtotal - discountAmount + tip);
 
+  // --- MISSING FUNCTIONS REDEFINED ---
 
-  const addToCart = (product: Product, quantity = 1) => {
-    setItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.product.id === product.id);
+  // Stabilize functions with useCallback
+  const addToCart = useCallback((product: Product, quantity: number = 1, warehouseId: string) => {
+    setItems((currentItems) => {
+      const existingItem = currentItems.find((item) => item.product.id === product.id);
       if (existingItem) {
-        return prevItems.map((item) =>
+        return currentItems.map((item) =>
           item.product.id === product.id
             ? { ...item, quantity: item.quantity + quantity }
             : item
         );
       }
-      return [...prevItems, { product, quantity }];
+      return [...currentItems, { product, quantity, warehouseId, productName: product.name }];
     });
-  };
+  }, []); // No dependencies needed due to functional updates
 
-  const removeFromCart = (productId: string) => {
-    setItems((prevItems) => prevItems.filter((item) => item.product.id !== productId));
-    toast({
-      title: "Item removed",
-      description: "The item has been removed from your cart.",
-      variant: "destructive"
-    })
-  };
+  const removeFromCart = useCallback((productId: string) => {
+    setItems((currentItems) => currentItems.filter((item) => item.product.id !== productId));
+  }, []);
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = useCallback((productId: string, quantity: number) => {
     if (quantity <= 0) {
       removeFromCart(productId);
       return;
     }
-    setItems((prevItems) =>
-      prevItems.map((item) =>
+    setItems((currentItems) =>
+      currentItems.map((item) =>
         item.product.id === productId ? { ...item, quantity } : item
       )
     );
-  };
+  }, [removeFromCart]);
 
-  const clearCart = () => {
-    setItems([]);
-    setCoupon(null);
-  };
-
-  const applyCoupon = (newCoupon: Coupon) => {
+  const applyCoupon = useCallback((newCoupon: Coupon) => {
     setCoupon(newCoupon);
+    if (isBrowser) window.localStorage.setItem('coupon', JSON.stringify(newCoupon));
     toast({
       title: "Coupon Applied",
-      description: `You saved with code ${newCoupon.code}!`,
+      description: `${newCoupon.code} applied successfully!`
     });
-  };
+  }, [toast]);
 
-  const removeCoupon = () => {
+  const removeCoupon = useCallback(() => {
     setCoupon(null);
-    toast({
-      title: "Coupon Removed",
-      description: "The discount has been removed.",
-    });
-  };
+    if (isBrowser) window.localStorage.removeItem('coupon');
+    toast({ title: "Coupon Removed" });
+  }, [toast]);
 
+  const clearCart = useCallback(() => {
+    setItems([]);
+    setCoupon(null);
+    setTip(0);
+    if (isBrowser) {
+      window.localStorage.removeItem('cart');
+      window.localStorage.removeItem('coupon');
+    }
+  }, []);
 
+  const contextValue = useMemo(() => ({
+    items,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    itemCount,
+    subtotal,
+    coupon,
+    applyCoupon,
+    removeCoupon,
+    discountAmount,
+    total,
+    tip,
+    setTip
+  }), [
+    items,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    itemCount,
+    subtotal,
+    coupon,
+    applyCoupon,
+    removeCoupon,
+    discountAmount,
+    total,
+    tip,
+    setTip
+  ]);
 
   return (
-    <CartContext.Provider
-      value={{
-        items,
-        addToCart,
-        removeFromCart,
-        updateQuantity,
-        clearCart,
-        itemCount,
-        subtotal,
-        coupon,
-        applyCoupon,
-        removeCoupon,
-        discountAmount,
-        total
-      }}
-    >
+    <CartContext.Provider value={contextValue}>
       {children}
     </CartContext.Provider>
   );

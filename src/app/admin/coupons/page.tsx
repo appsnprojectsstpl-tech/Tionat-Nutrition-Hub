@@ -73,7 +73,7 @@ export default function AdminCouponsPage() {
                 createdAt: serverTimestamp()
             });
 
-            logAdminAction({
+            logAdminAction(firestore, {
                 action: 'COUPON_CREATE',
                 performedBy: user?.email || 'unknown',
                 targetId: data.code,
@@ -218,14 +218,14 @@ export default function AdminCouponsPage() {
                                     <TableRow key={coupon.id}>
                                         <TableCell className="font-mono font-bold text-primary">{coupon.code}</TableCell>
                                         <TableCell>
-                                            {coupon.type === 'percentage' ? `${coupon.value}% Off` : `₹${coupon.value} Off`}
-                                            {coupon.maxDiscount && coupon.type === 'percentage' && <span className="text-xs text-muted-foreground block">Max ₹{coupon.maxDiscount}</span>}
+                                            {coupon.discountType === 'PERCENTAGE' ? `${coupon.discountValue}% Off` : `₹${coupon.discountValue} Off`}
+                                            {coupon.maxDiscount && coupon.discountType === 'PERCENTAGE' && <span className="text-xs text-muted-foreground block">Max ₹{coupon.maxDiscount}</span>}
                                         </TableCell>
                                         <TableCell className="text-xs">
                                             {coupon.minOrderValue > 0 && <div>Min: ₹{coupon.minOrderValue}</div>}
                                         </TableCell>
                                         <TableCell>
-                                            {coupon.usageCount} / {coupon.usageLimit || '∞'}
+                                            {coupon.usedCount || 0} / {coupon.usageLimit || '∞'}
                                         </TableCell>
                                         <TableCell>
                                             {format(coupon.expiryDate instanceof Date ? coupon.expiryDate : (coupon.expiryDate as any).toDate(), 'MMM d, yyyy')}

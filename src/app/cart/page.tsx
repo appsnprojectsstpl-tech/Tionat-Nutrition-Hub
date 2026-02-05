@@ -143,7 +143,7 @@ function FulfillmentBanner() {
 }
 
 export default function CartPage() {
-  const { items, updateQuantity, removeFromCart, subtotal, clearCart, discountAmount, total } = useCart();
+  const { items, updateQuantity, removeFromCart, subtotal, clearCart, discountAmount, total, tip, setTip } = useCart();
   const router = useRouter();
 
   const handleCheckout = () => {
@@ -205,7 +205,7 @@ export default function CartPage() {
                     <div className="flex-1 grid gap-1">
                       <h3 className="font-semibold text-sm md:text-base leading-tight">{product.name}</h3>
                       <p className="text-xs md:text-sm text-muted-foreground">
-                        {product.price.toFixed(2)}
+                        {(product.price || 0).toFixed(2)}
                       </p>
                       <div className="flex md:hidden items-center gap-2 mt-2">
                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => updateQuantity(product.id, quantity - 1)} disabled={quantity <= 1}>
@@ -228,7 +228,7 @@ export default function CartPage() {
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <p className="font-semibold text-base">
-                        {(product.price * quantity).toFixed(2)}
+                        {((product.price || 0) * quantity).toFixed(2)}
                       </p>
                       <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive h-8 w-8" onClick={() => removeFromCart(product.id)}>
                         <Trash2 className="h-4 w-4" />
@@ -281,9 +281,27 @@ export default function CartPage() {
                   <span className="text-green-600 font-bold">FREE</span>
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Handling Charge</span>
+                  <span className="flex items-center gap-1">
+                    Platform & Packaging Fee
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <AlertCircle className="h-3 w-3 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Includes packaging, handling, and platform maintenance.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </span>
                   <span className="text-foreground">₹2.00</span>
                 </div>
+                {tip > 0 && (
+                  <div className="flex justify-between text-sm text-foreground">
+                    <span>Delivery Tip</span>
+                    <span className="text-foreground font-medium">₹{tip.toFixed(2)}</span>
+                  </div>
+                )}
 
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-sm font-medium text-green-600">
@@ -302,7 +320,13 @@ export default function CartPage() {
                   </div>
                   <div className="flex gap-2">
                     {[10, 20, 30].map(amt => (
-                      <Button key={amt} variant="outline" size="sm" className="h-7 text-xs rounded-full border-dashed">
+                      <Button
+                        key={amt}
+                        variant={tip === amt ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setTip(tip === amt ? 0 : amt)}
+                        className={cn("h-7 text-xs rounded-full cursor-pointer", tip === amt ? "bg-primary text-white" : "border-dashed")}
+                      >
                         ₹{amt}
                       </Button>
                     ))}

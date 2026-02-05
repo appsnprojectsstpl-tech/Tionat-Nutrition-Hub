@@ -1,10 +1,11 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
 import { Warehouse } from '@/lib/types';
 import { useFirestore } from '@/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useAddress } from '@/providers/address-provider';
+import { perfMonitor } from '@/lib/performance-utils';
 
 interface WarehouseContextType {
     selectedWarehouse: Warehouse | null;
@@ -69,8 +70,12 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const checkPincode = async (pincode: string): Promise<Warehouse | null> => {
-        if (!firestore) return null;
+    const checkPincode = useCallback(async (pincode: string): Promise<Warehouse | null> => {
+        const stopTimer = perfMonitor.startTimer('check_pincode_availability');
+        if (!firestore) {
+            stopTimer({ error: 'no_firestore' });
+            return null;
+        }
 
         setIsLoading(true);
         // Query for a warehouse that contains this pincode
@@ -79,22 +84,38 @@ export function WarehouseProvider({ children }: { children: ReactNode }) {
             where('serviceablePincodes', 'array-contains', pincode)
         );
 
-        const snap = await getDocs(q);
+        try {
+            const snap = await getDocs(q);
 
-        if (!snap.empty) {
-            const wh = snap.docs[0].data() as Warehouse;
-            setSelectedWarehouse(wh);
-            localStorage.setItem('selected_warehouse_id', wh.id);
+            if (!snap.empty) {
+                const wh = snap.docs[0].data() as Warehouse;
+                setSelectedWarehouse(wh);
+                localStorage.setItem('selected_warehouse_id', wh.id);
+                setIsLoading(false);
+                stopTimer({ success: true, warehouseId: wh.id });
+                return wh;
+            }
+
             setIsLoading(false);
-            return wh;
+            stopTimer({ success: false });
+            return null;
+        } catch (error) {
+            console.error("Error checking pincode:", error);
+            setIsLoading(false);
+            stopTimer({ error: 'exception' });
+            return null;
         }
+    }, [firestore]);
 
-        setIsLoading(false);
-        return null;
-    };
+    const value = useMemo(() => ({
+        selectedWarehouse,
+        setSelectedWarehouse,
+        checkPincode,
+        isLoading
+    }), [selectedWarehouse, isLoading, checkPincode]);
 
     return (
-        <WarehouseContext.Provider value={{ selectedWarehouse, setSelectedWarehouse, checkPincode, isLoading }}>
+        <WarehouseContext.Provider value={value}>
             {children}
         </WarehouseContext.Provider>
     );

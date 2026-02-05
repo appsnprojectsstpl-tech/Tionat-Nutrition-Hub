@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Order } from '@/lib/types';
 import { format } from 'date-fns';
+import { toDate } from '@/lib/date-utils';
 import { Printer } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
@@ -40,7 +41,7 @@ export function OrderInvoice({ order }: InvoiceProps) {
                     <h2 className="text-xl font-semibold">INVOICE</h2>
                     <p className="text-sm text-muted-foreground mt-1"># {order.id.slice(0, 8).toUpperCase()}</p>
                     <p className="text-sm text-muted-foreground">
-                        Date: {order.orderDate && order.orderDate.toDate ? format(order.orderDate.toDate(), 'PPP') : 'N/A'}
+                        Date: {order.orderDate ? format(toDate(order.orderDate), 'PPP') : 'N/A'}
                     </p>
                 </div>
             </div>
@@ -69,7 +70,7 @@ export function OrderInvoice({ order }: InvoiceProps) {
                     </tr>
                 </thead>
                 <tbody>
-                    {order.items?.map((item: any) => (
+                    {order.orderItems?.map((item: any) => (
                         <tr key={item.productId} className="border-b">
                             <td className="py-3 pr-4">
                                 <p className="font-medium">{item.name}</p>

@@ -3,6 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductCatalogView } from "@/components/admin/products/product-catalog-view";
 import { ProductImportView } from "@/components/admin/products/product-import-view";
+import { InventoryView } from "@/components/admin/products/inventory-view";
 
 export default function ProductHubPage() {
   return (
@@ -12,12 +13,17 @@ export default function ProductHubPage() {
       <Tabs defaultValue="catalog" className="w-full">
         <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
           <TabsTrigger value="catalog">Product Catalog</TabsTrigger>
+          <TabsTrigger value="inventory">Warehouse Inventory</TabsTrigger>
           <TabsTrigger value="import">Bulk Import</TabsTrigger>
         </TabsList>
 
         <div className="mt-4">
           <TabsContent value="catalog">
             <ProductCatalogView />
+          </TabsContent>
+
+          <TabsContent value="inventory">
+            <InventoryView />
           </TabsContent>
 
           <TabsContent value="import">

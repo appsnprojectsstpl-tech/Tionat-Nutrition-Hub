@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Plus, Trash2, Printer, CheckCircle, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { toDate } from '@/lib/date-utils';
 
 export default function PurchaseOrdersPage() {
     const firestore = useFirestore();
@@ -218,7 +219,7 @@ export default function PurchaseOrdersPage() {
                                         {itemSearch && !selectedProduct && (
                                             <div className="absolute z-10 w-64 bg-background border rounded-md shadow-md mt-1 max-h-48 overflow-auto">
                                                 {filteredProducts?.map(p => (
-                                                    <div k={p.id} className="p-2 hover:bg-muted cursor-pointer text-sm"
+                                                    <div key={p.id} className="p-2 hover:bg-muted cursor-pointer text-sm"
                                                         onClick={() => { setSelectedProduct(p); setItemSearch(p.name); }}>
                                                         {p.name}
                                                     </div>
@@ -291,7 +292,7 @@ export default function PurchaseOrdersPage() {
                             pos?.map(po => (
                                 <TableRow key={po.id}>
                                     <TableCell className="font-medium">{po.poNumber}</TableCell>
-                                    <TableCell>{po.createdAt ? format(po.createdAt.toDate ? po.createdAt.toDate() : new Date(po.createdAt), 'MMM d, yyyy') : '-'}</TableCell>
+                                    <TableCell>{po.createdAt ? format(toDate(po.createdAt), 'MMM d, yyyy') : '-'}</TableCell>
                                     <TableCell>{po.supplierName}</TableCell>
                                     <TableCell>{po.warehouseName}</TableCell>
                                     <TableCell>

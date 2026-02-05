@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import Image from 'next/image';
 import type { Product } from '@/lib/types';
 import { Badge } from './ui/badge';
@@ -11,6 +11,8 @@ import Link from 'next/link';
 import { useCart } from '@/hooks/use-cart';
 import { useToast } from '@/hooks/use-toast';
 import { useWishlist } from '@/hooks/use-wishlist';
+import { useWarehouse } from '@/context/warehouse-context';
+import { PlaceholderImage } from './ui/placeholder-image';
 
 const getProductLink = (slug: string) => `/product-view?slug=${slug}`;
 
@@ -18,13 +20,14 @@ interface ProductCardProps {
   product: Product;
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export const ProductCard = memo(function ProductCard({ product }: ProductCardProps) {
   if (!product) return null;
   const safeName = product.name || 'Untitled Product';
 
   const { addToCart, items, updateQuantity } = useCart();
   const { toast } = useToast();
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const { selectedWarehouse } = useWarehouse();
 
   const cartItem = items.find(item => item.product.id === product.id);
   const isWishlisted = isInWishlist(product.id);
@@ -34,12 +37,25 @@ export function ProductCard({ product }: ProductCardProps) {
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (!selectedWarehouse) {
+      toast({ title: "Location Required", description: "Please select a delivery location first.", variant: "destructive" });
+      return;
+    }
     setIsCartAnimating(true);
     setTimeout(() => setIsCartAnimating(false), 400); // Reset after animation
-    addToCart(product);
+    addToCart(product, 1, selectedWarehouse.id);
     toast({
       title: "Added",
-      description: `${safeName} in cart.`,
+      description: (
+        <div className="flex items-center gap-3 mt-1">
+          {product.imageUrl && (
+            <div className="relative w-8 h-8 rounded overflow-hidden flex-shrink-0 border border-border">
+              <img src={product.imageUrl} alt={product.name} className="object-cover w-full h-full" />
+            </div>
+          )}
+          <span>{safeName} in cart.</span>
+        </div>
+      ),
       duration: 1500,
     });
   };
@@ -63,7 +79,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const discountPercentage = 20;
 
   return (
-    <div className="group relative flex flex-col bg-card rounded-3xl shadow-sm border border-border/40 overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/20 h-full">
+    <div className="group relative flex flex-col bg-card rounded-3xl shadow-sm border border-border/40 overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 hover:-translate-y-1 hover:border-primary/20 h-full">
 
       <Link href={getProductLink(product.slug)} className="relative aspect-[4/5] block overflow-hidden bg-secondary/20">
 
@@ -92,6 +108,8 @@ export function ProductCard({ product }: ProductCardProps) {
               className="object-cover transition-transform duration-700 group-hover:scale-105"
               onError={() => setImageError(true)}
               loading="lazy"
+              placeholder="blur"
+              blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iI2YwZjBmMCIvPjwvc3ZnPg=="
             />
             {product.images && product.images.length > 1 && (
               <div className="absolute inset-0 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-secondary/20">
@@ -106,9 +124,7 @@ export function ProductCard({ product }: ProductCardProps) {
             )}
           </>
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-secondary/50 text-muted-foreground/30 font-bold text-6xl select-none">
-            {safeName.charAt(0)}
-          </div>
+          <PlaceholderImage />
         )}
 
         {/* Discount Tag */}
@@ -139,7 +155,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
           {/* Action Button */}
           {product.status === 'Coming Soon' ? (
-            <Button disabled variant="secondary" size="sm" className="w-full rounded-full h-8 text-xs font-bold opacity-50">Soon</Button>
+            <Button disabled variant="secondary" size="sm" className="w-full rounded-full h-8 text-xs font-bold opacity-75 bg-amber-100 text-amber-700">Coming Soon</Button>
           ) : !cartItem ? (
             <Button
               onClick={handleAddToCart}
@@ -165,4 +181,12 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
     </div >
   );
-}
+}, (prev: any, next: any) => {
+  // Only re-render if product data actually changed
+  return (
+    prev.product.id === next.product.id &&
+    prev.product.stock === next.product.stock &&
+    prev.product.price === next.product.price &&
+    prev.product.discountedPrice === next.product.discountedPrice
+  );
+});

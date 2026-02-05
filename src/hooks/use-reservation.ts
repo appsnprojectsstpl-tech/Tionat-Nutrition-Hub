@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { doc, setDoc, deleteDoc, serverTimestamp, writeBatch, collection } from 'firebase/firestore';
-import { CartItem } from '@/context/cart-context';
+import { CartItem } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
 export const useReservation = () => {

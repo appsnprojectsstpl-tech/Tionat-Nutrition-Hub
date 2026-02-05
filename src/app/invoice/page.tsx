@@ -8,6 +8,7 @@ import { useSearchParams } from 'next/navigation';
 import { Loader2, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
+import { toDate } from '@/lib/date-utils';
 
 function InvoiceContent() {
     const searchParams = useSearchParams();
@@ -68,7 +69,7 @@ function InvoiceContent() {
                         <h2 className="text-2xl font-bold mb-4 text-gray-800">TAX INVOICE</h2>
                         <div className="space-y-1 text-sm">
                             <p><span className="font-semibold">Invoice #:</span> {order.invoiceNumber || 'PENDING'}</p>
-                            <p><span className="font-semibold">Date:</span> {order.orderDate?.toDate ? format(order.orderDate.toDate(), 'dd MMM yyyy') : '-'}</p>
+                            <p><span className="font-semibold">Date:</span> {order.orderDate ? format(toDate(order.orderDate), 'dd MMM yyyy') : '-'}</p>
                             <p><span className="font-semibold">Order ID:</span> {order.id.slice(0, 8).toUpperCase()}</p>
                         </div>
                     </div>

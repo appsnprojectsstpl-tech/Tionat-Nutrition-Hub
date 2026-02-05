@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { compressImage } from '@/lib/image-utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

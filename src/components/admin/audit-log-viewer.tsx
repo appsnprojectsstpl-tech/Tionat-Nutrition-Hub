@@ -1,7 +1,9 @@
 'use client';
 
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, orderBy, limit } from 'firebase/firestore';
+import { useCollection, useFirestore } from "@/firebase";
+import { collection, limit, orderBy, query, where } from "firebase/firestore";
+import { AuditLogEntry } from "@/lib/audit-logger";
+import { useMemoFirebase } from "@/firebase";
 import {
     Table,
     TableBody,
@@ -11,62 +13,84 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { format } from 'date-fns';
-import { Loader2 } from "lucide-react";
+import { format } from "date-fns";
+import { toDate } from "@/lib/date-utils";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState } from "react";
 
 export function AuditLogViewer() {
     const firestore = useFirestore();
+    const [filterType, setFilterType] = useState<string>('ALL');
 
-    const { data: logs, isLoading } = useCollection<any>(
-        firestore ? query(collection(firestore, 'inventory_logs'), orderBy('timestamp', 'desc'), limit(50)) : null
-    );
+    const logsQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        const baseRef = collection(firestore, 'admin_audit_logs');
 
-    if (isLoading) {
-        return <div className="flex justify-center p-4"><Loader2 className="animate-spin" /></div>;
-    }
+        if (filterType !== 'ALL') {
+            return query(baseRef, where('targetType', '==', filterType), orderBy('timestamp', 'desc'), limit(50));
+        }
+
+        return query(baseRef, orderBy('timestamp', 'desc'), limit(50));
+    }, [firestore, filterType]);
+
+    const { data: logs, isLoading } = useCollection<AuditLogEntry & { id: string; timestamp: any }>(logsQuery);
 
     return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Time</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Item</TableHead>
-                    <TableHead className="text-right">Change</TableHead>
-                    <TableHead>Reason</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {logs?.map((log) => (
-                    <TableRow key={log.id}>
-                        <TableCell className="whitespace-nowrap text-xs">
-                            {log.timestamp?.toDate ? format(log.timestamp.toDate(), 'MMM d, HH:mm') : 'Pending'}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                            <div className="font-medium">{log.userName || 'System'}</div>
-                            <div className="text-[10px] text-muted-foreground">{log.warehouseId}</div>
-                        </TableCell>
-                        <TableCell>
-                            <Badge variant="outline">{log.type || 'STOCK_UPDATE'}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                            {log.productName}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                            <span className={log.change > 0 ? "text-green-600" : "text-red-600"}>
-                                {log.change > 0 ? '+' : ''}{log.change}
-                            </span>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                            {log.reason}
-                        </TableCell>
-                    </TableRow>
-                ))}
-                {!isLoading && logs?.length === 0 && (
-                    <TableRow><TableCell colSpan={6} className="text-center">No audit logs found.</TableCell></TableRow>
-                )}
-            </TableBody>
-        </Table>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>System Audit Logs</CardTitle>
+                    <CardDescription>Recent sensitive actions performed by admins.</CardDescription>
+                </div>
+                <Select value={filterType} onValueChange={setFilterType}>
+                    <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Filter by Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="ALL">All Actions</SelectItem>
+                        <SelectItem value="ORDER">Orders</SelectItem>
+                        <SelectItem value="PRODUCT">Products</SelectItem>
+                        <SelectItem value="WAREHOUSE">Warehouses</SelectItem>
+                        <SelectItem value="SYSTEM">System Config</SelectItem>
+                    </SelectContent>
+                </Select>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Time</TableHead>
+                            <TableHead>Admin</TableHead>
+                            <TableHead>Action</TableHead>
+                            <TableHead>Target</TableHead>
+                            <TableHead>Details</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {isLoading && <TableRow><TableCell colSpan={5} className="text-center">Loading logs...</TableCell></TableRow>}
+                        {logs && logs.length > 0 ? (
+                            logs.map((log) => (
+                                <TableRow key={log.id}>
+                                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                        {log.timestamp ? format(toDate(log.timestamp), 'MMM d, HH:mm:ss') : '-'}
+                                    </TableCell>
+                                    <TableCell className="font-medium text-xs">{log.performedBy}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline">{log.action}</Badge>
+                                    </TableCell>
+                                    <TableCell className="text-xs font-mono">{log.targetType} / {log.targetId}</TableCell>
+                                    <TableCell className="text-xs max-w-xs truncate" title={log.details}>
+                                        {log.details}
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            !isLoading && <TableRow><TableCell colSpan={5} className="text-center">No logs found.</TableCell></TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
     );
 }

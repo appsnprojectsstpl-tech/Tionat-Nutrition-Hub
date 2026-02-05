@@ -2,8 +2,8 @@
 
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useFirestore, useCollection } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { ProductFilter } from '@/components/product-filter';
 import { ProductCard } from '@/components/product-card';
 import { Product } from '@/lib/types';
@@ -13,9 +13,10 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { levenshteinDistance } from '@/lib/utils';
+
+import { levenshteinDistance } from '@/lib/string-utils';
 // ... existing imports ...
 
 function SearchResults() {
@@ -28,51 +29,71 @@ function SearchResults() {
     const maxPrice = Number(searchParams.get('maxPrice')) || 100000;
     const categories = searchParams.getAll('category');
 
-    // Fetch ALL products
-    const { data: allProducts, isLoading } = useCollection<Product>(
-        firestore ? collection(firestore, 'products') : null
-    );
+    // Optimization: Server-side Query
+    const productsQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
 
-    const filteredProducts = allProducts?.map(product => {
-        const nameLower = product.name.toLowerCase();
-        const descLower = product.description.toLowerCase();
-        const q = searchQuery.trim();
+        const baseRef = collection(firestore, 'products');
+        const term = searchQuery.trim();
 
-        let score = 0;
-        if (!q) {
-            score = 1; // Show all if no query
-        } else {
-            if (nameLower === q) score = 100;
-            else if (nameLower.startsWith(q)) score = 80;
-            else if (nameLower.includes(q)) score = 60;
-            else if (descLower.includes(q)) score = 20;
-            else {
-                // Fuzzy Match (Typo tolerance)
-                // Only for words > 3 chars to avoid noise
-                if (q.length > 3) {
-                    // Check against name words
-                    const words = nameLower.split(' ');
-                    const minDistance = Math.min(...words.map(w => levenshteinDistance(w, q)));
-                    if (minDistance <= 2) {
-                        score = 40 - (minDistance * 10); // 40, 30, 20
-                    }
-                }
-            }
+        // 1. If search term exists, use Prefix Search (most efficient)
+        if (term.length > 0) {
+            return query(
+                baseRef,
+                where('name', '>=', term),
+                where('name', '<=', term + '\uf8ff'),
+                limit(50) // Limit to 50 results
+            );
         }
 
-        const matchesPrice = product.price >= minPrice && product.price <= maxPrice;
-        const matchesCategory = categories.length === 0 || categories.includes(product.categoryId);
+        // 2. If no search term but categories, filter by category (single category for now to avoid complex OR)
+        if (categories.length > 0) {
+            // Firestore 'in' supports up to 10 items
+            return query(baseRef, where('categoryId', 'in', categories.slice(0, 10)), limit(50));
+        }
 
-        return { product, score, isValid: score > 0 && matchesPrice && matchesCategory };
-    })
-        .filter(item => item.isValid)
-        .sort((a, b) => {
-            if (sortBy === 'price_asc') return a.product.price - b.product.price;
-            if (sortBy === 'price_desc') return b.product.price - a.product.price;
-            if (sortBy === 'name_asc') return a.product.name.localeCompare(b.product.name);
-            return b.score - a.score; // Default Relevance
+        // 3. Fallback: Recent products
+        return query(baseRef, limit(50));
+
+    }, [firestore, searchQuery, categories]);
+
+    // Fetch Limited products
+    const { data: serverProducts, isLoading } = useCollection<Product>(productsQuery);
+
+    const filteredProducts = useMemo(() => {
+        if (!serverProducts) return [];
+
+        return serverProducts.map(product => {
+            const nameLower = product.name.toLowerCase();
+            const descLower = product.description.toLowerCase();
+            const q = searchQuery.trim();
+
+            let score = 0;
+            if (!q) {
+                score = 1; // Show all if no query
+            } else {
+                if (nameLower === q) score = 100;
+                else if (nameLower.startsWith(q)) score = 80;
+                else if (nameLower.includes(q)) score = 60;
+                else if (descLower.includes(q)) score = 20;
+                // Fuzzy match is less useful on prefix-filtered results but kept for sorting
+            }
+
+            return { ...product, score };
         })
-        .map(item => item.product);
+            .filter(product => {
+                const matchesPrice = product.price >= minPrice && product.price <= maxPrice;
+                // Category filter already applied server-side if no search, but re-check here for safety
+                const matchesCategory = categories.length === 0 || categories.includes(product.categoryId);
+                return matchesPrice && matchesCategory;
+            })
+            .sort((a, b) => {
+                if (sortBy === 'price_asc') return a.price - b.price;
+                if (sortBy === 'price_desc') return b.price - a.price;
+                // relevance
+                return b.score - a.score;
+            });
+    }, [serverProducts, searchQuery, minPrice, maxPrice, categories, sortBy]);
 
     if (isLoading) {
         // ... (existing skeleton) ...

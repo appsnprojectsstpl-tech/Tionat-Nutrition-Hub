@@ -123,6 +123,7 @@ export function BannersView() {
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                             <div>
                                 <Label>Banner Image (Landscape)</Label>
+                                <p className="text-[10px] text-muted-foreground mb-2">Recommended size: 1920x1080px (16:9). Max 2MB.</p>
                                 <Input type="file" accept="image/*" onChange={(e) => setSelectedImage(e.target.files?.[0] || null)} />
                             </div>
                             <div>

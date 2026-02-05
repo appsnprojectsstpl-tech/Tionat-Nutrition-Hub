@@ -45,7 +45,8 @@ import {
     useCollection,
     useFirestore,
     useMemoFirebase,
-    addDocumentNonBlocking
+    addDocumentNonBlocking,
+    setDocumentNonBlocking
 } from "@/firebase";
 import {
     collection,
@@ -127,10 +128,10 @@ export function ManualOrderForm() {
 
         // Check if already added
         const exists = watchedItems.some(i => i.productId === productId);
-        if (exists) {
-            toast({ title: "Item exists", description: "Increase quantity instead.", variant: "secondary" });
-            return;
-        }
+            if (exists) {
+                toast({ title: "Item exists", description: "Increase quantity instead.", variant: "default" });
+                return;
+            }
 
         append({ productId, quantity: 1 });
     };
@@ -201,11 +202,11 @@ export function ManualOrderForm() {
                 orderPayload.status = 'Pending';
             }
 
-            await addDocumentNonBlocking(collection(firestore, 'orders'), orderPayload, orderId);
+            await setDocumentNonBlocking(doc(firestore, 'orders', orderId), orderPayload, { merge: true });
 
             // Sync to user subcollection if real user
             if (userId !== 'manual_guest') {
-                await addDocumentNonBlocking(collection(firestore, `users/${userId}/orders`), orderPayload, orderId);
+                await setDocumentNonBlocking(doc(firestore, `users/${userId}/orders`, orderId), orderPayload, { merge: true });
             }
 
             toast({

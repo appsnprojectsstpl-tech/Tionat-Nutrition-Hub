@@ -24,6 +24,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { format, subDays, isSameDay, startOfDay } from 'date-fns';
+import { toDate } from '@/lib/date-utils';
 import type { Order } from '@/lib/types';
 
 interface AnalyticsChartsProps {
@@ -45,10 +46,7 @@ export function AnalyticsCharts({ orders }: AnalyticsChartsProps) {
             const dayOrders = orders.filter(order => {
                 if (!order.orderDate) return false;
                 // Handle Firestore Timestamp or Date object
-                const orderDate = order.orderDate.hasOwnProperty('toDate')
-                    // @ts-ignore
-                    ? order.orderDate.toDate()
-                    : new Date(order.orderDate as string);
+                const orderDate = toDate(order.orderDate);
 
                 return isSameDay(orderDate, date);
             });

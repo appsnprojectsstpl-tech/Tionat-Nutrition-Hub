@@ -27,7 +27,12 @@ const couponSchema = z.object({
     value: z.coerce.number().min(1, "Value must be positive"),
     minOrderValue: z.coerce.number().min(0),
     maxDiscount: z.coerce.number().optional(),
-    expiryDate: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Date"),
+    expiryDate: z.string().refine((val) => {
+        const date = new Date(val);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return !isNaN(date.getTime()) && date >= today;
+    }, "Expiry date must be today or in the future"),
     usageLimit: z.coerce.number().optional(),
     isActive: z.boolean().default(true),
     applicableCategoryId: z.string().optional(),
@@ -75,7 +80,7 @@ export function CouponsView() {
                 createdAt: serverTimestamp()
             });
 
-            logAdminAction({
+            logAdminAction(firestore, {
                 action: 'COUPON_CREATE',
                 performedBy: user?.email || 'unknown',
                 targetId: data.code,
@@ -217,8 +222,8 @@ export function CouponsView() {
                                     <TableRow key={coupon.id}>
                                         <TableCell className="font-mono font-bold text-primary">{coupon.code}</TableCell>
                                         <TableCell>
-                                            {coupon.type === 'percentage' ? `${coupon.value}% Off` : `₹${coupon.value} Off`}
-                                            {coupon.maxDiscount && coupon.type === 'percentage' && <span className="text-xs text-muted-foreground block">Max ₹{coupon.maxDiscount}</span>}
+                                            {coupon.discountType === 'PERCENTAGE' ? `${coupon.discountValue}% Off` : `₹${coupon.discountValue} Off`}
+                                            {coupon.maxDiscount && coupon.discountType === 'PERCENTAGE' && <span className="text-xs text-muted-foreground block">Max ₹{coupon.maxDiscount}</span>}
                                         </TableCell>
                                         <TableCell className="text-xs">
                                             {coupon.minOrderValue > 0 && <div>Min: ₹{coupon.minOrderValue}</div>}
@@ -227,7 +232,7 @@ export function CouponsView() {
                                             )}
                                         </TableCell>
                                         <TableCell>
-                                            {coupon.usageCount} / {coupon.usageLimit || '∞'}
+                                            {coupon.usedCount} / {coupon.usageLimit || '∞'}
                                         </TableCell>
                                         <TableCell>
                                             {format(coupon.expiryDate instanceof Date ? coupon.expiryDate : (coupon.expiryDate as any).toDate(), 'MMM d, yyyy')}

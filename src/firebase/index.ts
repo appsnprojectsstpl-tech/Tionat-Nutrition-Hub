@@ -33,14 +33,22 @@ import { getStorage } from 'firebase/storage';
 import { getMessaging } from 'firebase/messaging';
 
 export function getSdks(firebaseApp: FirebaseApp) {
+  let messaging = null;
+  try {
+    if (typeof window !== 'undefined') {
+      messaging = getMessaging(firebaseApp);
+    }
+  } catch (e) {
+    console.warn("Messaging failed to initialize (likely non-secure context):", e);
+  }
+
   return {
     firebaseApp,
     auth: getAuth(firebaseApp),
     firestore: getFirestore(firebaseApp),
     functions: getFunctions(firebaseApp, 'us-central1'),
     storage: getStorage(firebaseApp),
-    // Messaging is only supported in browser
-    messaging: typeof window !== 'undefined' ? getMessaging(firebaseApp) : null
+    messaging
   };
 }
 

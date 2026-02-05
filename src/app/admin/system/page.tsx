@@ -12,6 +12,8 @@ import { useFirestore, useUser } from "@/firebase";
 import { doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { updateDocumentNonBlocking, setDocumentNonBlocking } from "@/firebase/non-blocking-updates";
+import { AuditLogViewer } from "@/components/admin/audit-log-viewer";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 export default function SystemHealthPage() {
     const firestore = useFirestore();
@@ -36,7 +38,7 @@ export default function SystemHealthPage() {
     const toggleMaintenanceMode = async () => {
         const newState = !settings?.maintenanceMode;
         try {
-            await updateDocumentNonBlocking(settingsRef, { maintenanceMode: newState }, { merge: true });
+            await updateDocumentNonBlocking(settingsRef, { maintenanceMode: newState });
             toast({
                 title: newState ? "MAINTENANCE MODE ON" : "Maintenance Mode Off",
                 description: newState ? "Storefront is now locked." : "Storefront is live.",
@@ -51,7 +53,7 @@ export default function SystemHealthPage() {
     const toggleEmergencyMode = async () => {
         const newState = !settings?.emergencyReadOnly;
         try {
-            await updateDocumentNonBlocking(settingsRef, { emergencyReadOnly: newState }, { merge: true });
+            await updateDocumentNonBlocking(settingsRef, { emergencyReadOnly: newState });
             toast({
                 title: newState ? "EMERGENCY MODE ACTIVATED" : "System Normal",
                 description: newState ? "All writes are now blocked globally." : "Write access restored.",
@@ -137,9 +139,7 @@ export default function SystemHealthPage() {
                             <CardDescription>Recent suspicious or critical actions.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex items-center justify-center p-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                                <FileText className="mr-2 h-4 w-4" /> Audit Log Component Placeholder
-                            </div>
+                            <AuditLogViewer collectionName="admin_audit_logs" />
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -180,9 +180,19 @@ export default function SystemHealthPage() {
                                         Locks the storefront. Only Admins can access.
                                     </p>
                                 </div>
-                                <Switch
-                                    checked={settings?.maintenanceMode || false}
-                                    onCheckedChange={toggleMaintenanceMode}
+                                <ConfirmDialog
+                                    title="Confirm Maintenance Mode"
+                                    description="This will lock the storefront for all customers. Are you sure?"
+                                    onConfirm={toggleMaintenanceMode}
+                                    variant="destructive"
+                                    trigger={
+                                        <div onClick={(e) => e.stopPropagation()}>
+                                            <Switch
+                                                checked={settings?.maintenanceMode || false}
+                                                className="data-[state=checked]:bg-yellow-500"
+                                            />
+                                        </div>
+                                    }
                                 />
                             </div>
 
@@ -193,9 +203,20 @@ export default function SystemHealthPage() {
                                         Prevents ALL users (including admins) from creating orders or updating stock.
                                     </p>
                                 </div>
-                                <Switch
-                                    checked={settings?.emergencyReadOnly || false}
-                                    onCheckedChange={toggleEmergencyMode}
+                                <ConfirmDialog
+                                    title="ACTIVATE EMERGENCY READ-ONLY?"
+                                    description="This stops all DB writes. The business effectively halts. Use only if data integrity is at risk."
+                                    onConfirm={toggleEmergencyMode}
+                                    variant="destructive"
+                                    confirmText="ACTIVATE LOCKDOWN"
+                                    trigger={
+                                        <div onClick={(e) => e.stopPropagation()}>
+                                            <Switch
+                                                checked={settings?.emergencyReadOnly || false}
+                                                className="data-[state=checked]:bg-red-600"
+                                            />
+                                        </div>
+                                    }
                                 />
                             </div>
                         </CardContent>

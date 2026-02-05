@@ -22,6 +22,7 @@ import { DollarSign, Package, Users, ShoppingCart, ArrowUpRight } from "lucide-r
 import { useCollection, useFirebase, useUser, useMemoFirebase } from "@/firebase";
 import { collection, query, orderBy, limit, where } from "firebase/firestore";
 import { format } from 'date-fns';
+import { toDate } from '@/lib/date-utils';
 import { useMemo, useState } from "react";
 import {
   Select,
@@ -45,8 +46,8 @@ export default function AdminDashboard() {
   const { data: products } = useCollection<Product>(productsQuery);
 
   const customersQuery = useMemoFirebase(
-    () => (firestore && user ? query(collection(firestore, 'users'), where('role', '==', 'user')) : null),
-    [firestore, user]
+    () => (firestore && user && ['admin', 'superadmin'].includes(userProfile?.role || '') ? query(collection(firestore, 'users'), where('role', '==', 'user')) : null),
+    [firestore, user, userProfile]
   );
   const { data: customers } = useCollection<UserProfile>(customersQuery);
 
@@ -60,6 +61,7 @@ export default function AdminDashboard() {
   const allOrdersQuery = useMemoFirebase(
     () => {
       if (!firestore || !user) return null;
+      if (!userProfile?.role || !['admin', 'superadmin', 'warehouse_admin'].includes(userProfile.role)) return null;
 
       const baseRef = collection(firestore, 'orders');
 
@@ -72,7 +74,9 @@ export default function AdminDashboard() {
         );
       }
 
-      return query(baseRef, orderBy('orderDate', 'desc'))
+      // Performance: Limit to recent 100 orders to prevent crash
+      // For full analytics, we should use a separate dedicated analytics page with date range filters.
+      return query(baseRef, orderBy('orderDate', 'desc'), limit(100));
     },
     [firestore, user, userProfile]
   );
@@ -87,18 +91,18 @@ export default function AdminDashboard() {
   const filteredOrders = useMemo(() => {
     if (!allOrders) return [];
     if (selectedWarehouseId === 'All') return allOrders;
-    return allOrders.filter(o => o.warehouseId === selectedWarehouseId);
+    return allOrders.filter((o: Order) => o.warehouseId === selectedWarehouseId);
   }, [allOrders, selectedWarehouseId]);
 
   const recentOrders = useMemo(() => filteredOrders?.slice(0, 5) || [], [filteredOrders]);
 
   const totalRevenue = useMemo(() => {
-    return filteredOrders?.reduce((acc, order) => acc + order.totalAmount, 0) || 0;
+    return filteredOrders?.reduce((acc: number, order: Order) => acc + order.totalAmount, 0) || 0;
   }, [filteredOrders]);
 
   const activeWarehouseName = useMemo(() => {
     if (selectedWarehouseId === 'All') return 'All Warehouses';
-    return warehouses?.find(w => w.id === selectedWarehouseId)?.name || selectedWarehouseId;
+    return warehouses?.find((w: Warehouse) => w.id === selectedWarehouseId)?.name || selectedWarehouseId;
   }, [selectedWarehouseId, warehouses]);
 
   return (
@@ -116,7 +120,7 @@ export default function AdminDashboard() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="All">All Warehouses</SelectItem>
-                {warehouses?.map(w => (
+                {warehouses?.map((w: Warehouse) => (
                   <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -159,7 +163,7 @@ export default function AdminDashboard() {
               ₹{(filteredOrders && filteredOrders.length > 0 ? totalRevenue / filteredOrders.length : 0).toFixed(0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Per order average
+              Per order average (Based on last 100)
             </p>
           </CardContent>
         </Card>
@@ -172,7 +176,7 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-700">
-                {filteredOrders?.filter(o => o.status === 'Pending').length ?? 0}
+                {filteredOrders?.filter((o: Order) => o.status === 'Pending').length ?? 0}
               </div>
               <p className="text-xs text-orange-600/80">
                 Requires processing
@@ -185,51 +189,51 @@ export default function AdminDashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-4">
 
 
-      <Link href="/admin/products">
-        <Card className="hover:bg-muted transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{products?.length ?? 0}</div>
-            <p className="text-xs text-muted-foreground">
-              In your catalog
-            </p>
-          </CardContent>
-        </Card>
-      </Link>
-      <Link href="/admin/orders">
-        <Card className="hover:bg-muted transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{filteredOrders?.length ?? 0}</div>
-            <p className="text-xs text-muted-foreground">
-              Processed in {selectedWarehouseId !== 'All' ? 'selected store' : 'total'}
-            </p>
-          </CardContent>
-        </Card>
-      </Link>
-      <Link href="/admin/users">
-        <Card className="hover:bg-muted transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{customers?.length ?? 0}</div>
-            <p className="text-xs text-muted-foreground">
-              Registered in the system
-            </p>
-          </CardContent>
-        </Card>
-      </Link>
-    </div>
+        <Link href="/admin/products">
+          <Card className="hover:bg-muted transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{products?.length ?? 0}</div>
+              <p className="text-xs text-muted-foreground">
+                In your catalog
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/admin/orders">
+          <Card className="hover:bg-muted transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{filteredOrders?.length ?? 0}</div>
+              <p className="text-xs text-muted-foreground">
+                Processed in {selectedWarehouseId !== 'All' ? 'selected store' : 'total'}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/admin/users">
+          <Card className="hover:bg-muted transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{customers?.length ?? 0}</div>
+              <p className="text-xs text-muted-foreground">
+                Registered in the system
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
 
-      {/* Analytics Charts Section */ }
+      {/* Analytics Charts Section */}
       <div className="mt-8">
         <AnalyticsCharts orders={filteredOrders || []} />
       </div>
@@ -252,7 +256,7 @@ export default function AdminDashboard() {
               <TableBody>
                 {isLoadingOrders && <TableRow><TableCell colSpan={4} className="text-center">Loading...</TableCell></TableRow>}
                 {recentOrders && recentOrders.length > 0 ? (
-                  recentOrders.map((order) => (
+                  recentOrders.map((order: Order) => (
                     <TableRow key={order.id}>
                       <TableCell>
                         <div className="font-medium">{order.shippingAddress?.name || 'Unknown User'}</div>
@@ -261,7 +265,7 @@ export default function AdminDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        {order.orderDate && typeof (order.orderDate as any).toDate === 'function' ? format((order.orderDate as any).toDate(), 'MMM d, yyyy') : 'N/A'}
+                        {order.orderDate ? format(toDate(order.orderDate), 'MMM d, yyyy') : 'N/A'}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <Badge className="text-xs" variant={order.status === 'Pending' ? 'secondary' : 'default'}>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, increment, writeBatch } from 'firebase/firestore';
 import { PurchaseOrder, POStatus, POItem, Product, Warehouse, Supplier } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -14,16 +14,18 @@ import { Label } from '@/components/ui/label';
 import { Plus, Trash2, Printer, CheckCircle, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import { toDate } from '@/lib/date-utils';
 
 export function PurchaseOrdersView() {
     const firestore = useFirestore();
     const { toast } = useToast();
+    const { user } = useUser(); // Added user context
     const [isCreateOpen, setIsCreateOpen] = useState(false);
 
     const posQuery = useMemoFirebase(() => {
-        if (!firestore) return null;
+        if (!firestore || !user) return null; // Wait for user auth
         return query(collection(firestore, 'purchase_orders'), orderBy('createdAt', 'desc'));
-    }, [firestore]);
+    }, [firestore, user]);
 
     const { data: pos, isLoading } = useCollection<PurchaseOrder>(posQuery);
 
@@ -284,7 +286,7 @@ export function PurchaseOrdersView() {
                             pos?.map(po => (
                                 <TableRow key={po.id}>
                                     <TableCell className="font-medium">{po.poNumber}</TableCell>
-                                    <TableCell>{po.createdAt ? format(po.createdAt.toDate ? po.createdAt.toDate() : new Date(po.createdAt), 'MMM d, yyyy') : '-'}</TableCell>
+                                    <TableCell>{po.createdAt ? format(toDate(po.createdAt), 'MMM d, yyyy') : '-'}</TableCell>
                                     <TableCell>{po.supplierName}</TableCell>
                                     <TableCell>{po.warehouseName}</TableCell>
                                     <TableCell>

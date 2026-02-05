@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from "next/image";
 import { MultiImageUpload } from "@/components/multi-image-upload";
@@ -61,27 +61,30 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useCollection, useFirestore, useMemoFirebase, useUser, useFirebaseApp } from "@/firebase";
-import { collection, doc, writeBatch } from "firebase/firestore";
+import { collection, doc, writeBatch, query, limit } from "firebase/firestore";
 import { getStorage, ref, getDownloadURL } from "firebase/storage";
 import { deleteDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Product, Inventory, Warehouse } from "@/lib/types";
 import { subCategories, categories } from "@/lib/data";
 import { useToast } from '@/hooks/use-toast';
 import Papa from 'papaparse';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 import { InventoryStats } from "@/components/admin/inventory-stats";
 import { WarehouseStockManager } from "@/components/admin/warehouse-stock-manager";
 
 const productSchema = z.object({
     name: z.string().min(1, 'Product name is required'),
-    price: z.coerce.number().positive('Price must be a positive number'),
-    costPrice: z.coerce.number().min(0).optional(),
+    price: z.coerce.number().positive('Price must be greater than 0'),
+    costPrice: z.coerce.number().min(0, 'Cost price cannot be negative').optional(),
     categoryId: z.string().min(1, 'Category is required'),
     subcategoryId: z.string().min(1, 'Subcategory is required'),
+    // sku: z.string().optional(), // Removed
+    // barcode: z.string().optional(), // Removed
     status: z.enum(['New Arrival', 'Coming Soon', 'Available']),
     imageUrl: z.string().optional(),
     images: z.array(z.string()).optional(),
-    stock: z.coerce.number().min(0, 'Stock cannot be negative'),
+    stock: z.coerce.number().int().min(0, 'Stock cannot be negative'),
     description: z.string().optional(),
     weight: z.string().optional(),
     unit: z.string().optional(),
@@ -98,6 +101,77 @@ function createSlug(name: string) {
         .replace(/[^a-z0-9\s-]/g, '')
         .trim()
         .replace(/[\s-]+/g, '-');
+}
+
+// --- Inline Edit Component ---
+function InlineEditInput({
+    value,
+    onSave,
+    type = "text",
+    prefix = ""
+}: {
+    value: string | number,
+    onSave: (val: string | number) => void,
+    type?: "text" | "number",
+    prefix?: string
+}) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [localValue, setLocalValue] = useState(value);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setLocalValue(value);
+    }, [value]);
+
+    useEffect(() => {
+        if (isEditing && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [isEditing]);
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            setIsEditing(false);
+            if (localValue != value) {
+                onSave(localValue);
+            }
+        }
+        if (e.key === 'Escape') {
+            setIsEditing(false);
+            setLocalValue(value);
+        }
+    };
+
+    const handleBlur = () => {
+        setIsEditing(false);
+        if (localValue != value) {
+            onSave(localValue);
+        }
+    };
+
+    if (isEditing) {
+        return (
+            <Input
+                ref={inputRef}
+                type={type}
+                value={localValue}
+                onChange={(e) => setLocalValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleBlur}
+                className="h-8 w-24"
+            />
+        );
+    }
+
+    return (
+        <div
+            onClick={() => setIsEditing(true)}
+            className="cursor-pointer hover:bg-muted/50 p-1 rounded border border-transparent hover:border-border flex items-center"
+        >
+            {prefix && <span className="text-muted-foreground mr-1">{prefix}</span>}
+            {localValue}
+        </div>
+    );
 }
 
 export function ProductCatalogView() {
@@ -173,15 +247,15 @@ export function ProductCatalogView() {
     const { user, userProfile } = useUser();
 
     const productsCollection = useMemoFirebase(
-        () => (firestore && user ? collection(firestore, 'products') : null),
+        () => (firestore && user ? query(collection(firestore, 'products'), limit(100)) : null),
         [firestore, user]
     );
     const inventoryCollection = useMemoFirebase(
-        () => (firestore && user ? collection(firestore, 'inventory') : null),
+        () => (firestore && user ? query(collection(firestore, 'inventory'), limit(100)) : null),
         [firestore, user]
     );
     const warehousesCollection = useMemoFirebase(
-        () => (firestore && user ? collection(firestore, 'warehouses') : null),
+        () => (firestore && user ? query(collection(firestore, 'warehouses'), limit(20)) : null),
         [firestore, user]
     );
 
@@ -214,7 +288,7 @@ export function ProductCatalogView() {
                 let updatedCount = 0;
                 let notFoundCount = 0;
 
-                const productsByName = new Map(products.map(p => [(p.name || '').toLowerCase(), p.id]));
+                const productsByName = new Map<string, string>(products.map((p: Product) => [(p.name || '').toLowerCase(), p.id]));
                 const validRows: { productId: string; stock: number }[] = [];
 
                 // 1. Prepare Valid Operations
@@ -340,8 +414,8 @@ export function ProductCatalogView() {
     const productData = useMemo(() => {
         if (!products || !inventory) return [];
 
-        return products.map(product => {
-            const inventoryItem = inventory.find(inv => inv.productId === product.id);
+        return products.map((product: Product) => {
+            const inventoryItem = inventory.find((inv: Inventory) => inv.productId === product.id);
             const stock = inventoryItem?.stock ?? 0;
             const stockStatus = stock > 10 ? 'In Stock' : stock > 0 ? 'Low Stock' : 'Out of Stock';
             return {
@@ -349,12 +423,12 @@ export function ProductCatalogView() {
                 stock,
                 stockStatus,
             };
-        }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        }).sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
     }, [products, inventory]);
 
     const filteredProducts = useMemo(() => {
         if (selectedCategory === 'All') return productData;
-        return productData.filter(p => p.categoryId === selectedCategory);
+        return productData.filter((p: any) => p.categoryId === selectedCategory);
     }, [productData, selectedCategory]);
 
     const isLoading = isLoadingProducts || isLoadingInventory;
@@ -390,7 +464,7 @@ export function ProductCatalogView() {
             const inventoryRef = doc(firestore, 'inventory', editingProduct.id);
             setDocumentNonBlocking(inventoryRef, { productId: editingProduct.id, stock }, { merge: true });
 
-            logAdminAction({
+            logAdminAction(firestore, {
                 action: 'PRODUCT_UPDATE',
                 performedBy: user?.email || 'unknown',
                 targetId: editingProduct.id,
@@ -409,7 +483,7 @@ export function ProductCatalogView() {
             const inventoryRef = doc(firestore, 'inventory', newProductRef.id);
             setDocumentNonBlocking(inventoryRef, { productId: newProductRef.id, stock }, { merge: true });
 
-            logAdminAction({
+            logAdminAction(firestore, {
                 action: 'PRODUCT_CREATE',
                 performedBy: user?.email || 'unknown',
                 targetId: newProductRef.id,
@@ -437,7 +511,7 @@ export function ProductCatalogView() {
             const invDocRef = doc(firestore, 'inventory', productId);
             deleteDocumentNonBlocking(invDocRef);
 
-            logAdminAction({
+            logAdminAction(firestore, {
                 action: 'PRODUCT_DELETE',
                 performedBy: user?.email || 'unknown',
                 targetId: productId,
@@ -620,6 +694,10 @@ export function ProductCatalogView() {
                                                 </FormItem>
                                             )}
                                         />
+                                        <div className="flex gap-4">
+                                            {/* SKU and Barcode fields removed as per request */}
+                                        </div>
+
                                         <FormField
                                             control={form.control}
                                             name="status"
@@ -730,7 +808,7 @@ export function ProductCatalogView() {
                                 <TableHead>Featured</TableHead>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Status</TableHead>
-                                <TableHead className="hidden md:table-cell">Price</TableHead>
+                                <TableHead className="hidden md:table-cell w-[120px]">Price (₹)</TableHead>
                                 <TableHead>Stock Status</TableHead>
                                 <TableHead className="w-[150px]">Stock Level</TableHead>
                                 <TableHead className="text-right">Qty</TableHead>
@@ -741,7 +819,7 @@ export function ProductCatalogView() {
                         </TableHeader>
                         <TableBody>
                             {isLoading && <TableRow><TableCell colSpan={8} className="text-center py-4">Loading products...</TableCell></TableRow>}
-                            {filteredProducts?.map((product) => {
+                            {filteredProducts?.map((product: any) => {
                                 const productWithStock = { ...product, stock: product.stock ?? 0 };
                                 const stockPercent = Math.min(((product.stock ?? 0) / 100) * 100, 100);
 
@@ -774,8 +852,28 @@ export function ProductCatalogView() {
                                                 {product.status}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="hidden md:table-cell">
-                                            {(product.price || 0).toFixed(2)}
+                                        <TableCell className="hidden md:table-cell font-medium">
+                                            <InlineEditInput
+                                                value={product.price}
+                                                type="number"
+                                                prefix="₹"
+                                                onSave={async (newPrice) => {
+                                                    if (!firestore) return;
+                                                    const priceVal = Number(newPrice);
+                                                    const docRef = doc(firestore, 'products', product.id);
+                                                    await setDocumentNonBlocking(docRef, { price: priceVal }, { merge: true });
+
+                                                    logAdminAction(firestore, {
+                                                        action: 'PRODUCT_UPDATE',
+                                                        performedBy: user?.email || 'unknown',
+                                                        targetId: product.id,
+                                                        targetType: 'PRODUCT',
+                                                        details: `Quick update: Price changed to ${priceVal}`
+                                                    });
+
+                                                    toast({ description: "Price updated" });
+                                                }}
+                                            />
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant={product.stockStatus === 'Out of Stock' ? 'destructive' : product.stockStatus === 'Low Stock' ? 'secondary' : 'default'} className={cn('text-[10px] sm:text-xs', product.stockStatus === 'Low Stock' && 'bg-yellow-200 text-yellow-800 hover:bg-yellow-200/80')}>
@@ -796,17 +894,32 @@ export function ProductCatalogView() {
                                             </div>
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="w-20 justify-center h-7 text-xs"
-                                                onClick={() => {
-                                                    setStockManagerProduct(product);
-                                                    setIsStockManagerOpen(true);
+                                            <InlineEditInput
+                                                value={product.stock || 0}
+                                                type="number"
+                                                onSave={async (newStock) => {
+                                                    if (!firestore) return;
+                                                    const stockVal = Number(newStock);
+
+                                                    // Update Inventory Collection
+                                                    const invRef = doc(firestore, 'inventory', product.id);
+                                                    await setDocumentNonBlocking(invRef, { productId: product.id, stock: stockVal }, { merge: true });
+
+                                                    // Update Product Collection (Denormalized)
+                                                    const prodRef = doc(firestore, 'products', product.id);
+                                                    await setDocumentNonBlocking(prodRef, { stock: stockVal }, { merge: true });
+
+                                                    logAdminAction(firestore, {
+                                                        action: 'STOCK_UPDATE',
+                                                        performedBy: user?.email || 'unknown',
+                                                        targetId: product.id,
+                                                        targetType: 'PRODUCT',
+                                                        details: `Quick update: Stock changed to ${stockVal}`
+                                                    });
+
+                                                    toast({ description: "Stock updated" });
                                                 }}
-                                            >
-                                                {product.stock}
-                                            </Button>
+                                            />
                                         </TableCell>
                                         <TableCell className="sticky right-0 bg-card">
                                             <DropdownMenu>

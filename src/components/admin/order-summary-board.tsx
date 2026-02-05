@@ -3,6 +3,7 @@ import { Order } from "@/lib/types";
 import { CheckCircle, Clock, Package, Truck, XCircle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { isToday } from "date-fns";
+import { toDate } from '@/lib/date-utils';
 
 interface OrderSummaryBoardProps {
     orders: Order[];
@@ -18,7 +19,7 @@ export function OrderSummaryBoard({ orders }: OrderSummaryBoardProps) {
 
     // Daily Goal Logic
     const ordersToday = orders.filter(o => {
-        return o.orderDate && o.orderDate.toDate && isToday(o.orderDate.toDate());
+        return o.orderDate && isToday(toDate(o.orderDate));
     }).length;
 
     const dailyGoal = 20;

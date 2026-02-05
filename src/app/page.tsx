@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import {
     Salad,
@@ -49,8 +50,9 @@ import { cn } from '@/lib/utils';
 import { useAuth, useCollection, useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, where, query, orderBy, doc, limit } from 'firebase/firestore';
 import { ProductCarousel } from '@/components/product-carousel';
-import { NotificationHandler } from '@/components/notification-handler';
-import { UpdateChecker } from '@/components/update-checker';
+
+const NotificationHandler = dynamic(() => import('@/components/notification-handler').then(mod => mod.NotificationHandler), { ssr: false });
+const UpdateChecker = dynamic(() => import('@/components/update-checker').then(mod => mod.UpdateChecker), { ssr: false });
 import {
     Carousel,
     CarouselContent,
@@ -82,7 +84,7 @@ export default function Home() {
     const firestore = useFirestore();
     const [activeCategory, setActiveCategory] = useState('All');
     const [isClient, setIsClient] = useState(false);
-    const categoriesToShow = ['All', 'Ready to Cook', 'Breakfast', 'Lunch', 'Dinner'];
+
 
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -137,35 +139,43 @@ export default function Home() {
     // Removed manual useMemo filtering as the hook handles it
 
 
+    // Dynamic Categories Fetch
+    const categoriesQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'categories'), orderBy('name'), limit(10));
+    }, [firestore]);
+    const { data: dbCategories } = useCollection<Category>(categoriesQuery);
+
+    const categoriesToShow = useMemo(() => {
+        if (!dbCategories || dbCategories.length === 0) return ['All', 'Ready to Cook', 'Breakfast']; // Fallback
+        const names = dbCategories.map(c => c.name);
+        return ['All', ...names];
+    }, [dbCategories]);
+
+    // Icon mapping fallback
+    const getCategoryIcon = (name: string) => {
+        if (categoryIcons[name as keyof typeof categoryIcons]) return categoryIcons[name as keyof typeof categoryIcons];
+        return <Package className="w-6 h-6" />;
+    };
+
     return (
         <div className="flex flex-col min-h-screen bg-background">
-            {/* Initialize push notifications and update checking */}
             <NotificationHandler />
             <UpdateChecker />
-
-            {/* Flash Sale Top Banner */}
             <FlashSaleBanner />
 
-            {/* <AppHeader /> removed, using AppShell */}
             <main className="flex-1 pb-16 relative">
-                {/* Search moved to Global Header */}
-
-                {/* Search moved to Global Header */}
-                {/* Search moved to Global Header */}
-
-                {/* Dynamic Hero Carousel */}
                 <div className="mt-4 px-4 overflow-hidden">
                     <HeroCarousel featuredProducts={featuredProducts} />
                 </div>
 
-                {/* Visual Categories Grid */}
                 <div className="mt-6 px-4">
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="font-headline font-bold text-base">Shop by Category</h3>
-                        <span className="text-xs text-primary font-bold">See All</span>
+                        <Link href="/categories" className="text-xs text-primary font-bold">See All</Link>
                     </div>
                     <div className="grid grid-cols-4 gap-3">
-                        {categoriesToShow.map((name) => (
+                        {categoriesToShow.slice(0, 7).map((name) => (
                             <button
                                 key={name}
                                 onClick={() => setActiveCategory(name)}
@@ -178,7 +188,7 @@ export default function Home() {
                                         : "bg-secondary/50 hover:bg-secondary"
                                 )}>
                                     <div className={cn("transition-transform duration-300 group-hover:scale-110", activeCategory === name ? "text-primary" : "text-muted-foreground")}>
-                                        {categoryIcons[name as keyof typeof categoryIcons]}
+                                        {getCategoryIcon(name)}
                                     </div>
                                 </div>
                                 <span className={cn(
@@ -189,12 +199,12 @@ export default function Home() {
                                 </span>
                             </button>
                         ))}
-                        <button className="flex flex-col items-center gap-2 group">
+                        <Link href="/categories" className="flex flex-col items-center gap-2 group">
                             <div className="h-16 w-16 rounded-2xl flex items-center justify-center bg-secondary/30 border border-dashed border-border hover:bg-secondary/50 transition-all">
                                 <Plus className="h-6 w-6 text-muted-foreground" />
                             </div>
                             <span className="text-[10px] font-medium text-muted-foreground">More</span>
-                        </button>
+                        </Link>
                     </div>
                 </div>
 
@@ -233,24 +243,7 @@ export default function Home() {
                     </div>
                 </div>
 
-                {/* Deal of the Day */}
-                <div className="px-4 mb-8">
-                    <div className="bg-gradient-to-r from-amber-200 to-yellow-400 rounded-2xl p-4 flex items-center justify-between shadow-md relative overflow-hidden">
-                        <div className="absolute -right-4 -top-4 bg-white/30 w-24 h-24 rounded-full blur-xl"></div>
-                        <div className="z-10">
-                            <h3 className="font-headline font-bold text-lg text-amber-900 leading-tight">Deal of<br />the Day</h3>
-                            <p className="text-xs text-amber-800 font-medium mt-1">Ends in <span className="font-bold font-mono bg-white/80 px-1 rounded text-amber-900">04:32:19</span></p>
-                        </div>
-                        <div className="z-10 flex flex-col items-end">
-                            <div className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-amber-900 shadow-sm mb-1">
-                                UP TO 60% OFF
-                            </div>
-                            <Button size="sm" className="h-8 rounded-full bg-amber-950 text-amber-100 hover:bg-amber-900 border-none shadow-sm">
-                                Grab Now
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+
 
                 <section className="px-4 pb-4">
                     <div className="flex items-center justify-between mb-4">
@@ -342,18 +335,22 @@ function HeroCarousel({ featuredProducts }: { featuredProducts: Product[] | null
     // 1. If Banners exist, show them
     if (banners && banners.length > 0) {
         return (
-            <Carousel className="w-full" opts={{ loop: true, autoplay: true }}>
+            <Carousel className="w-full" opts={{ loop: true }}>
                 <CarouselContent>
                     {banners.map((banner) => (
                         <CarouselItem key={banner.id}>
                             <div className="relative h-48 md:h-64 w-full overflow-hidden rounded-2xl shadow-lg">
-                                <Image
-                                    src={banner.imageUrl}
-                                    alt={banner.title || 'Banner'}
-                                    fill
-                                    className="object-cover"
-                                />
-                                <div className="absolute inset-0 bg-black/20" /> {/* Slight overlay */}
+                                {banner.imageUrl && (
+                                    <Image
+                                        src={banner.imageUrl}
+                                        alt={banner.title || 'Banner'}
+                                        fill
+                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+                                        className="object-cover"
+                                        priority={true}
+                                    />
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" /> {/* Text Scrim */}
 
                                 {(banner.title || banner.subtitle) && (
                                     <div className="absolute inset-0 flex flex-col justify-center p-6 md:p-10 text-white">

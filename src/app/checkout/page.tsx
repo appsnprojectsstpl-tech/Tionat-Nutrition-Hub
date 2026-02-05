@@ -71,7 +71,7 @@ const shippingSchema = z.object({
 type ShippingFormData = z.infer<typeof shippingSchema>;
 
 export default function CheckoutPage() {
-  const { items, subtotal, clearCart, discountAmount, coupon, total } = useCart();
+  const { items, subtotal, clearCart, discountAmount, coupon, total, tip } = useCart();
   const { user, isUserLoading } = useAuth();
   const firestore = useFirestore();
   const router = useRouter();
@@ -147,7 +147,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (userProfile) {
-      setValue('name', `${userProfile.firstName} ${userProfile.lastName}`);
+      setValue('name', `${userProfile.firstName || ''} ${userProfile.lastName || ''}`.trim());
       if (userProfile.addresses && userProfile.addresses.length > 0) {
         const latestAddress = userProfile.addresses[0];
         const [address, city, pincode] = latestAddress.split(',').map(s => s.trim());
@@ -181,6 +181,7 @@ export default function CheckoutPage() {
 
   const handlePayment = async (formData: ShippingFormData) => {
     if (!user || !firestore) return;
+
     setIsSubmitting(true);
 
     try {
@@ -217,8 +218,10 @@ export default function CheckoutPage() {
         return;
       }
 
+
       const validation = await validateStock(items, formData.pincode);
       if (!validation.isValid) {
+        console.warn("Validation Failed:", validation.errors);
         toast({
           title: "Stock Issue",
           description: validation.errors[0],
@@ -231,7 +234,9 @@ export default function CheckoutPage() {
       const fulfillingWarehouseId = validation.warehouseId;
 
       // 0.5 RESERVE STOCK (New)
+
       await createReservation(items, fulfillingWarehouseId!);
+
 
       // PREPARE ID (Hoisted for scope access)
       const orderRef = doc(collection(firestore, 'orders'));
@@ -252,83 +257,88 @@ export default function CheckoutPage() {
           throw new Error("Store is currently halted for maintenance. No orders accepted.");
         }
 
-        // STRICT GOVERNANCE: Operating Hours
-        const nowTime = new Date();
-        const currentHour = nowTime.getHours();
-        const currentMinute = nowTime.getMinutes();
-        const currentTimeVal = currentHour * 60 + currentMinute;
-
-        const parseTime = (timeStr: string | undefined, defaultStr: string) => {
-          const [h, m] = (timeStr || defaultStr).split(':').map(Number);
-          return h * 60 + (m || 0);
-        };
-
-        const openTimeVal = parseTime(whData.openingTime, "09:00");
-        const closeTimeVal = parseTime(whData.closingTime, "22:00");
-
-        if (currentTimeVal < openTimeVal || currentTimeVal >= closeTimeVal) {
-          throw new Error(`Store is closed. Operating hours are from ${whData.openingTime || '09:00'} to ${whData.closingTime || '22:00'}.`);
-        }
+        // STRICT GOVERNANCE: Operating Hours - REMOVED per user request (Manual control only)
+        // const nowTime = new Date();
+        // ... (removed time check logic)
 
         // STRICT GOVERNANCE: Capacity Check
+        // 1. READ PHASE: Gather all necessary data upfront
         const now = new Date();
         const slotKey = `${fulfillingWarehouseId}_${now.toISOString().slice(0, 13)}`;
         const statsRef = doc(firestore, 'warehouse_stats', slotKey);
-        const statsDoc = await transaction.get(statsRef);
 
+        const userRef = doc(firestore, 'users', user.uid);
+        let couponRef = null;
+        if (coupon && coupon.id) {
+          couponRef = doc(firestore, 'coupons', coupon.id);
+        }
+
+        // Parallel Reads
+        // A. Warehouse (Already fetched, preventing re-read for simplicity or strictly reading again if needed, but existing is fine as it was first)
+        // Actually, we must read EVERYTHING inside the transaction for consistency.
+        // We already read warehouseDoc at line 250. That's fine. It was the first read.
+
+        const reads = [
+          transaction.get(statsRef),
+          transaction.get(userRef),
+          ...(couponRef ? [transaction.get(couponRef)] : []),
+          // Products
+          ...items.map(item => transaction.get(doc(firestore, 'products', item.product.id))),
+          // Inventory
+          ...items.map(item => transaction.get(doc(firestore, 'warehouse_inventory', `${fulfillingWarehouseId}_${item.product.id}`)))
+        ];
+
+        const results = await Promise.all(reads);
+
+        // Unpack Results
+        let idx = 0;
+        const statsDoc = results[idx++] as any;
+        const userDoc = results[idx++] as any;
+        const couponDocSnapshot = couponRef ? results[idx++] : null;
+
+        const productDocs = results.slice(idx, idx + items.length);
+        idx += items.length;
+        const invDocs = results.slice(idx, idx + items.length);
+
+        // 2. LOGIC & VALIDATION PHASE
+        // A. Stats Check
         let currentSlotCount = 0;
         if (statsDoc.exists()) {
           currentSlotCount = statsDoc.data().count || 0;
         }
+        if (currentSlotCount >= 20) throw new Error("High Traffic: This delivery slot is full. Please try again in the next hour.");
 
-        if (currentSlotCount >= 20) {
-          throw new Error("High Traffic: This delivery slot is full. Please try again in the next hour.");
-        }
-
-        // --- SECURITY: SERVER-SIDE PRICE VALIDATION ---
+        // B. Item Validation
         let validatedSubtotal = 0;
         const validatedItems = [];
+        const inventoryUpdates = []; // Queue inventory updates
 
-        for (const item of items) {
-          const productRef = doc(firestore, 'products', item.product.id);
-          const productDoc = await transaction.get(productRef);
 
-          if (!productDoc.exists()) {
-            throw new Error(`Product '${item.product.name}' is no longer available.`);
-          }
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const productDoc = productDocs[i];
+          const invDoc = invDocs[i];
+
+          if (!productDoc.exists()) throw new Error(`Product '${item.product.name}' is no longer available.`);
 
           const liveData = productDoc.data();
           const livePrice = liveData.price;
-
-          // STRICT EQUALITY CHECK
-          if (livePrice !== item.product.price) {
-            // In a stricter system, we might just use livePrice. 
-            // But for user consent, it's better to fail if cart is stale.
-            throw new Error(`Price changed for '${item.product.name}' (Cart: ${item.product.price}, Live: ${livePrice}). Please refresh.`);
-          }
+          if (livePrice !== item.product.price) throw new Error(`Price changed for '${item.product.name}'. Please refresh.`);
 
           validatedSubtotal += livePrice * item.quantity;
-          validatedItems.push({
-            ...item,
-            product: {
-              ...item.product,
-              price: livePrice // Use trusted price
-            }
-          });
+          validatedItems.push({ ...item, product: { ...item.product, price: livePrice } });
+
+          if (!invDoc.exists()) throw new Error(`Inventory record missing for '${item.product.name}'.`);
+          const currentStock = invDoc.data().stock || 0;
+          if (currentStock < item.quantity) throw new Error(`Insufficient stock for '${item.product.name}'. Available: ${currentStock}`);
+
+          // Queue the write
+          inventoryUpdates.push({ ref: invDoc.ref, quantity: item.quantity });
         }
 
-        // Recalculate Totals based on Trusted Data
-        // Handling Logic: (Subtotal + Charges) - Discount
+        // C. Totals & Logic
         const handlingCharge = 2.00;
-        let newTotal = validatedSubtotal + handlingCharge;
-
-        // Re-apply coupons/loyalty if valid
-        // NOTE: Coupon logic ideally should also be re-verified inside transaction, 
-        // but for now we trust the hook's 'discountAmount' IF it passed the basic checks.
-        // A better approach is to read the coupon doc here too.
-
-        // We will stick to the previous 'discountAmount' but clamp it to the new total to be safe.
-        // (Assuming discountAmount was purely coupon based)
+        let newTotal = validatedSubtotal + handlingCharge + tip;
         const safeDiscount = Math.min(discountAmount, validatedSubtotal);
         newTotal -= safeDiscount;
 
@@ -336,34 +346,17 @@ export default function CheckoutPage() {
         const nextSeq = (whData.currentInvoiceSequence || 0) + 1;
         const invoiceNumber = `${prefix}-${now.getFullYear()}-${String(nextSeq).padStart(6, '0')}`;
 
-        // Update Slot Count
-        transaction.set(statsRef, { count: increment(1) }, { merge: true });
+        if (couponRef && (!couponDocSnapshot || !couponDocSnapshot.exists())) throw new Error("Coupon invalid");
 
-        const userRef = doc(firestore, 'users', user.uid);
-        const userDoc = await transaction.get(userRef);
-
-        let couponRef = null;
-        let couponDocSnapshot = null;
-        if (coupon && coupon.id) {
-          couponRef = doc(firestore, 'coupons', coupon.id);
-          couponDocSnapshot = await transaction.get(couponRef);
-          if (!couponDocSnapshot.exists()) throw new Error("Coupon invalid");
-        }
-
-        // B. PREPARE DATA
-        // Recalculate basic vals
         let loyaltyDiscount = 0;
         let pointsToDeduct = 0;
         const currentPoints = userDoc.exists() ? (userDoc.data().loyaltyPoints || 0) : 0;
-
         if (redeemPoints && currentPoints > 0) {
-          const potentialDiscount = currentPoints / 10;
-          loyaltyDiscount = Math.min(potentialDiscount, newTotal);
+          loyaltyDiscount = Math.min(currentPoints / 10, newTotal);
           pointsToDeduct = Math.ceil(loyaltyDiscount * 10);
         }
 
-        // Update outer variable
-        finalPayable = Math.max(0, newTotal - loyaltyDiscount); // Ensure non-negative
+        finalPayable = Math.max(0, newTotal - loyaltyDiscount);
         const pointsEarned = Math.floor(finalPayable / 100);
 
         const orderPayload: Order = {
@@ -388,22 +381,33 @@ export default function CheckoutPage() {
           })),
           paymentMethod: formData.paymentMethod,
           discountApplied: safeDiscount + loyaltyDiscount,
+          tipAmount: tip,
           couponCode: coupon ? coupon.code : null,
-          warehouseId: fulfillingWarehouseId || 'global',
+          warehouseId: fulfillingWarehouseId!,
           invoiceNumber: invoiceNumber
         };
 
-        // C. WRITES
+        // 3. WRITE PHASE: Execute all writes atomically
+        // Inventory
+        inventoryUpdates.forEach(update => {
+          transaction.update(update.ref, { stock: increment(-update.quantity) });
+        });
+
+        // Stats
+        transaction.set(statsRef, { count: increment(1) }, { merge: true });
+
+        // Orders
         transaction.set(orderRef, orderPayload);
         const userOrderRef = doc(firestore, `users/${user.uid}/orders`, orderId);
         transaction.set(userOrderRef, orderPayload);
 
+        // Sequences & Coupons
         transaction.update(warehouseRef, { currentInvoiceSequence: nextSeq });
-
-        if (couponRef && couponDocSnapshot) {
+        if (couponRef) {
           transaction.update(couponRef, { usedCount: increment(1) });
         }
 
+        // User Data: Notifications & Loyalty
         const notificationRef = doc(collection(firestore, `users/${user.uid}/notifications`));
         transaction.set(notificationRef, {
           title: "Order Placed",
@@ -414,16 +418,15 @@ export default function CheckoutPage() {
           link: `/order-confirmation?orderId=${orderId}`
         });
 
-        if (userRef) {
+        if (userRef) { // Should always be true as we fetched it
           let pointChange = pointsEarned - pointsToDeduct;
-          transaction.update(userRef, { loyaltyPoints: increment(pointChange) });
+          if (pointChange !== 0) {
+            transaction.update(userRef, { loyaltyPoints: increment(pointChange) });
+          }
 
-          // Record Loyalty History
           const historyCollectionRef = collection(firestore, `users/${user.uid}/loyalty_history`);
-
           if (pointsEarned > 0) {
-            const earnRef = doc(historyCollectionRef);
-            transaction.set(earnRef, {
+            transaction.set(doc(historyCollectionRef), {
               type: 'EARN',
               points: pointsEarned,
               reason: `Order #${invoiceNumber}`,
@@ -431,10 +434,8 @@ export default function CheckoutPage() {
               createdAt: serverTimestamp()
             });
           }
-
           if (pointsToDeduct > 0) {
-            const redeemRef = doc(historyCollectionRef);
-            transaction.set(redeemRef, {
+            transaction.set(doc(historyCollectionRef), {
               type: 'REDEEM',
               points: -pointsToDeduct,
               reason: `Redeemed on #${invoiceNumber}`,
@@ -739,9 +740,14 @@ export default function CheckoutPage() {
                   </div>
                 )}
                 <div className="flex justify-between text-sm">
-                  <span>Shipping</span>
                   <span>Free</span>
                 </div>
+                {tip > 0 && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Delivery Tip</span>
+                    <span>₹{tip.toFixed(2)}</span>
+                  </div>
+                )}
 
                 {/* Loyalty Section in Summary */}
                 {userProfile?.loyaltyPoints && userProfile.loyaltyPoints > 0 && (

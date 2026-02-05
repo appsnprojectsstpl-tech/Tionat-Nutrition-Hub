@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 // Barcode font is assumed to be loaded globally or we use a simple CSS trick/library
 // For this demo, we will use a visual placeholder or same font if available
 
-export default function ShippingLabelPage() {
+function ShippingLabelContent() {
     const searchParams = useSearchParams();
     const id = searchParams.get('id');
     const firestore = useFirestore();
@@ -42,7 +42,7 @@ export default function ShippingLabelPage() {
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
     if (!order) return <div>Order not found</div>;
 
-    const items = order.items || order.orderItems || [];
+    const items = order.orderItems || [];
     const totalWeight = items.reduce((acc: number, item: any) => acc + (item.weight ? parseFloat(item.weight) : 0.5) * item.quantity, 0);
 
     return (
@@ -122,4 +122,14 @@ export default function ShippingLabelPage() {
             `}</style>
         </div>
     );
+}
+
+import { Suspense } from 'react';
+
+export default function ShippingLabelPage() {
+    return (
+        <Suspense fallback={<div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>}>
+            <ShippingLabelContent />
+        </Suspense>
+    )
 }

@@ -6,7 +6,7 @@ import { CheckCircle2, ShoppingBag, Plus } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect } from "react";
-import { useFirestore, useCollection } from "@/firebase";
+import { useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, query, limit, where } from "firebase/firestore";
 import { Product } from "@/lib/types";
 import { useCart } from "@/hooks/use-cart";
@@ -20,12 +20,15 @@ function UpsellOffers() {
 
     // Fetch 3 random products (simulated by limit 3)
     // Ideally we'd use a specific 'upsell' tag or just popular items
-    const { data: products } = useCollection<Product>(
-        firestore ? query(collection(firestore, 'products'), limit(3)) : null
-    );
+    const productsQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'products'), limit(3));
+    }, [firestore]);
+
+    const { data: products } = useCollection<Product>(productsQuery);
 
     const handleAddUpsell = (product: Product) => {
-        addToCart(product, 1);
+        addToCart(product, 1, product.warehouseId || "default");
 
         // Mock a coupon object or apply directly if possible
         // Since applyCoupon expects a Coupon object from DB, we might need a real coupon code "UPSELL10" existing in DB.

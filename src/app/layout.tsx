@@ -1,12 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { Toaster } from "@/components/ui/toaster";
-import { FirebaseClientProvider } from '@/firebase';
-import { CartProvider } from '@/hooks/use-cart';
-import { AddressProvider } from '@/providers/address-provider';
-import { WarehouseProvider } from '@/context/warehouse-context';
-import { PincodeGuard } from '@/components/pincode-guard';
-import { GlobalErrorGuard } from '@/components/global-error-guard';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -60,21 +53,21 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
 };
 
-import { ThemeProvider } from "@/components/theme-provider";
-import { UpdateChecker } from "@/components/update-checker";
-import { NotificationHandler } from "@/components/notification-handler";
-
-
 import { Outfit } from 'next/font/google';
 
 const outfit = Outfit({
   subsets: ['latin'],
-  variable: '--font-geist-sans', // Mapping to the variable name we set in tailwind.config
+  variable: '--font-geist-sans',
   display: 'swap',
 });
 
+import { AppProviders } from '@/providers/app-providers';
 import { AppShell } from "@/components/app-shell";
 import { MaintenanceGuard } from "@/components/maintenance-guard";
+import { GlobalErrorGuard } from "@/components/global-error-guard";
+import { PincodeGuard } from "@/components/pincode-guard";
+import { UpdateChecker } from "@/components/update-checker";
+import { NotificationHandler } from "@/components/notification-handler";
 
 export default function RootLayout({
   children,
@@ -84,54 +77,21 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`tionat ${outfit.variable}`}>
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-               window.onerror = function(msg, url, line, col, error) {
-                 var div = document.createElement('div');
-                 div.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:black;color:red;z-index:99999;font-size:14px;padding:20px;overflow:auto;font-family:monospace;white-space:pre-wrap;';
-                 div.innerHTML = '<h1>FATAL BOOT ERROR</h1><h3>' + msg + '</h3><p>' + url + ':' + line + ':' + col + '</p><hr/><p>' + (error && error.stack ? error.stack : 'No stack') + '</p><button onclick="window.location.reload()" style="background:white;color:black;padding:10px;margin-top:20px;">RELOAD</button>';
-                 document.body.appendChild(div);
-                 return false; 
-               };
-               window.onunhandledrejection = function(event) {
-                 var div = document.createElement('div');
-                 div.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#2d0000;color:#ff5555;z-index:99999;font-size:14px;padding:20px;overflow:auto;font-family:monospace;white-space:pre-wrap;';
-                 div.innerHTML = '<h1>UNHANDLED PROMISE ERROR</h1><h3>' + event.reason + '</h3><hr/><button onclick="window.location.reload()" style="background:white;color:black;padding:10px;margin-top:20px;">RELOAD</button>';
-                 document.body.appendChild(div);
-               };
-             `
-          }}
-        />
+        {/* Optimized for Production */}
       </head>
-      <body className="font-body antialiased bg-background">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <FirebaseClientProvider>
-            <AddressProvider>
-              <CartProvider>
-                <WarehouseProvider>
-                  <GlobalErrorGuard>
-                    <PincodeGuard />
-                    <MaintenanceGuard>
-                      <AppShell>
-                        {children}
-                      </AppShell>
-                    </MaintenanceGuard>
-                  </GlobalErrorGuard>
-                </WarehouseProvider>
-              </CartProvider>
-            </AddressProvider>
-          </FirebaseClientProvider>
-          {/* Temporarily disabled due to static export issues */}
-          {/* <UpdateChecker /> */}
-          {/* <NotificationHandler /> */}
-          <Toaster />
-        </ThemeProvider>
+      <body className="font-body antialiased bg-background" suppressHydrationWarning>
+        <AppProviders>
+          <GlobalErrorGuard>
+            <PincodeGuard />
+            <MaintenanceGuard>
+              <AppShell>
+                {children}
+              </AppShell>
+            </MaintenanceGuard>
+          </GlobalErrorGuard>
+          <UpdateChecker />
+          <NotificationHandler />
+        </AppProviders>
       </body>
     </html>
   );

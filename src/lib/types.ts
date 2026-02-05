@@ -5,7 +5,7 @@ export type CategoryStatus = 'Active' | 'Coming Soon';
 
 export type Category = {
   id: string;
-  name: 'Nutritional Care' | 'Health Care' | 'Personal Care';
+  name: string;
   status: CategoryStatus;
 };
 
@@ -23,6 +23,7 @@ export type Product = {
   price: number;
   costPrice?: number;
   categoryId: string;
+  categoryName?: string; // Added for easier filtering
   subcategoryId: string;
   status: ProductStatus;
   imageUrl: string;
@@ -35,6 +36,11 @@ export type Product = {
   metaTitle?: string;
   metaDescription?: string;
   metaKeywords?: string;
+  stock?: number;
+  isActive?: boolean;
+  sku?: string;
+  barcode?: string;
+  warehouseId?: string;
 };
 
 export type Inventory = {
@@ -42,18 +48,7 @@ export type Inventory = {
   stock: number;
 }
 
-export interface Coupon {
-  id: string;
-  code: string;
-  type: 'percentage' | 'fixed_amount';
-  value: number;
-  minOrderValue: number; // 0 if none
-  maxDiscount?: number; // For percentage based
-  expiryDate: Date | string | any; // Timestamp or date string
-  isActive: boolean;
-  usageLimit?: number;
-  usageCount: number;
-}
+
 
 export type Warehouse = {
   id: string;
@@ -119,12 +114,20 @@ export type OrderItem = {
   image?: string;
 };
 
+export type CartItem = {
+  product: Product;
+  quantity: number;
+  warehouseId?: string; // Optional for migration, but enforced in logic
+  productName?: string;
+};
+
 export type Order = {
   id: string;
   userId: string;
+  ticketId?: string;
   orderDate: Timestamp | FieldValue; // FieldValue when writing, Timestamp when reading
   totalAmount: number;
-  status: 'Pending' | 'Paid' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Paid' | 'Processing' | 'Accepted' | 'Packed' | 'Shipped' | 'Delivered' | 'Cancelled';
   shippingAddress: {
     name: string;
     address: string;
@@ -142,8 +145,29 @@ export type Order = {
   finalAmount?: number;
   returnStatus?: 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
   returnReason?: string;
+  tipAmount?: number;
   returnDate?: Timestamp | FieldValue;
   returnProcessedAt?: Timestamp | FieldValue;
+  logistics?: {
+    courierName?: string;
+    trackingId?: string;
+    shippedDate?: Timestamp | FieldValue;
+    deliveredDate?: Timestamp | FieldValue;
+    addressSnapshot?: any;
+  };
+  financials?: {
+    subtotal: number;
+    discountApplied?: number;
+    loyaltyDiscount?: number;
+    deliveryFee?: number;
+    totalAmount: number;
+  };
+  timeline?: {
+    status: string;
+    timestamp: Timestamp | FieldValue;
+    note?: string;
+  }[];
+  payment?: any;
 };
 
 export type LoyaltyProgram = {
@@ -227,7 +251,6 @@ export type Banner = {
   title?: string;
   subtitle?: string;
   link?: string;
-  isActive: boolean;
   isActive: boolean;
   order: number;
 };

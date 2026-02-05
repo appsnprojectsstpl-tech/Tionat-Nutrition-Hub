@@ -1,17 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useFirestore, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import { useDoc } from '@/firebase/firestore/use-doc';
-
-interface AppVersion {
-    currentVersion: string;
-    minRequiredVersion: string;
-    updateUrl: string;
-    releaseNotes: string;
-    forceUpdate: boolean;
-}
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import packageJson from '../../package.json';
 
 interface UpdateStatus {
     updateAvailable: boolean;
@@ -21,53 +11,76 @@ interface UpdateStatus {
     updateUrl: string;
     releaseNotes: string;
     isLoading: boolean;
+    lastChecked: Date | null;
+    checkVersion: () => Promise<void>;
 }
 
-const APP_VERSION = '1.0.16'; // From package.json
-
 export function useAppVersion(): UpdateStatus {
-    const firestore = useFirestore();
-    const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
+    const currentVersion = packageJson.version;
+    const GITHUB_REPO = 'appsnprojectsstpl-tech/Tionat-Nutrition-Hub';
+    const CHECK_INTERVAL = 1000 * 60 * 30; // Check every 30 mins
+
+    const [updateStatus, setUpdateStatus] = useState<Omit<UpdateStatus, 'checkVersion'>>({
         updateAvailable: false,
         forceUpdate: false,
-        currentVersion: APP_VERSION,
+        currentVersion: currentVersion,
         newVersion: '',
         updateUrl: '',
         releaseNotes: '',
         isLoading: true,
+        lastChecked: null
     });
 
-    const versionDocRef = useMemoFirebase(
-        () => (firestore ? doc(firestore, 'app_config', 'version') : null),
-        [firestore]
-    );
+    const checkVersion = useCallback(async () => {
+        setUpdateStatus(prev => ({ ...prev, isLoading: true }));
+        try {
+            // Add cache busting to ensure fresh results
+            const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest?t=${new Date().getTime()}`);
 
-    const { data: versionData, isLoading } = useDoc<AppVersion>(versionDocRef);
+            if (!response.ok) {
+                if (response.status === 403) {
+                    console.warn("GitHub API rate limit exceeded for update check.");
+                } else if (response.status === 404) {
+                    console.info("No releases found in GitHub repo.");
+                }
+                setUpdateStatus(prev => ({ ...prev, isLoading: false, lastChecked: new Date() }));
+                return;
+            }
 
-    useEffect(() => {
-        if (!isLoading && versionData) {
-            const serverVersion = versionData.currentVersion;
-            const minRequired = versionData.minRequiredVersion;
+            const data = await response.json();
+            const latestVersion = data.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
+            const needsUpdate = compareVersions(currentVersion, latestVersion) < 0;
 
-            // Simple version comparison (assumes semantic versioning)
-            const needsUpdate = compareVersions(APP_VERSION, serverVersion) < 0;
-            const isForcedUpdate = compareVersions(APP_VERSION, minRequired) < 0;
+            // Check for "FORCE_UPDATE" flag in release body text
+            const isForceUpdate = data.body?.includes('[FORCE_UPDATE]') || false;
+
+            // Find APK Asset
+            const apkAsset = data.assets?.find((asset: any) => asset.name.endsWith('.apk'));
+            const downloadUrl = apkAsset ? apkAsset.browser_download_url : data.html_url;
 
             setUpdateStatus({
                 updateAvailable: needsUpdate,
-                forceUpdate: isForcedUpdate,
-                currentVersion: APP_VERSION,
-                newVersion: serverVersion,
-                updateUrl: versionData.updateUrl || '',
-                releaseNotes: versionData.releaseNotes || 'New version available',
+                forceUpdate: isForceUpdate,
+                currentVersion,
+                newVersion: latestVersion,
+                updateUrl: downloadUrl,
+                releaseNotes: data.body || 'New version available',
                 isLoading: false,
+                lastChecked: new Date()
             });
-        } else if (!isLoading) {
-            setUpdateStatus(prev => ({ ...prev, isLoading: false }));
+        } catch (error) {
+            console.error("Update check failed:", error);
+            setUpdateStatus(prev => ({ ...prev, isLoading: false, lastChecked: new Date() }));
         }
-    }, [versionData, isLoading]);
+    }, [currentVersion]);
 
-    return updateStatus;
+    useEffect(() => {
+        checkVersion();
+        const interval = setInterval(checkVersion, CHECK_INTERVAL);
+        return () => clearInterval(interval);
+    }, [checkVersion]);
+
+    return useMemo(() => ({ ...updateStatus, checkVersion }), [updateStatus, checkVersion]);
 }
 
 // Compare semantic versions (e.g., "1.0.0" vs "1.1.0")

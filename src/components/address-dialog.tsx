@@ -61,16 +61,23 @@ export function AddressDialog({ children, address, onSave }: AddressDialogProps)
         let initialLabel: 'Home' | 'Work' | 'Other' = 'Home';
         let initialAddr = address || '';
 
-        if (address && address.startsWith('[')) {
-            const endBracket = address.indexOf(']');
-            if (endBracket > -1) {
-                const labelStr = address.substring(1, endBracket);
-                if (['Home', 'Work', 'Other'].includes(labelStr)) {
-                    initialLabel = labelStr as any;
-                    initialAddr = address.substring(endBracket + 1).trim();
-                }
+        // Robust Regex Parsing
+        // Matches: [Home] Street... or [Work] Street...
+        const labelRegex = /^\[(Home|Work|Other)\]\s*(.+)$/i;
+        const match = address ? address.match(labelRegex) : null;
+
+        if (match) {
+            // match[1] is Label, match[2] is Address
+            const extractedLabel = match[1];
+            // Normalize case just in case
+            const normalizedLabel = extractedLabel.charAt(0).toUpperCase() + extractedLabel.slice(1).toLowerCase();
+
+            if (['Home', 'Work', 'Other'].includes(normalizedLabel)) {
+                initialLabel = normalizedLabel as 'Home' | 'Work' | 'Other';
+                initialAddr = match[2].trim();
             }
         }
+
         return { label: initialLabel, address: initialAddr };
     };
 

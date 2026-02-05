@@ -18,6 +18,7 @@ import { ShoppingCart, Plus, Minus } from 'lucide-react';
 import { ProductCard } from '@/components/product-card';
 import { cn } from '@/lib/utils';
 import { useCart } from '@/hooks/use-cart';
+import { useWarehouse } from '@/context/warehouse-context';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect, useState } from 'react';
 import { ProductReviews } from '@/components/product-reviews';
@@ -30,6 +31,7 @@ type Props = {
 export default function ProductDetailClient({ slug }: Props) {
     const { addToCart, items, updateQuantity } = useCart();
     const { toast } = useToast();
+    const { selectedWarehouse } = useWarehouse();
     const firestore = useFirestore();
 
     const [product, setProduct] = useState<Product | null>(null);
@@ -188,8 +190,8 @@ export default function ProductDetailClient({ slug }: Props) {
                                         </Button>
                                     </div>
                                 ) : (
-                                    <Button size="lg" disabled={product.status === 'Coming Soon'} onClick={() => addToCart(product, 1)} className="flex-1 rounded-xl font-bold shadow-lg shadow-primary/20 text-base h-12">
-                                        {product.status === 'Coming Soon' ? 'Coming Soon' : `Add Item - ₹${product.price.toFixed(2)}`}
+                                    <Button size="lg" disabled={!selectedWarehouse || product.status === 'Coming Soon'} onClick={() => selectedWarehouse && addToCart(product, 1, selectedWarehouse.id)} className="flex-1 rounded-xl font-bold shadow-lg shadow-primary/20 text-base h-12">
+                                        {!selectedWarehouse ? "Select Location" : product.status === 'Coming Soon' ? 'Coming Soon' : `Add Item - ₹${product.price.toFixed(2)}`}
                                     </Button>
                                 )}
                             </div>

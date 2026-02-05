@@ -9,9 +9,7 @@
   :root {
     /* Tionat Premium Light: Tinted Violet & Neon Lime */
     --background: 270 30% 98%;
-    /* Very pale violet tint */
     --foreground: 270 95% 10%;
-    /* Deepest violet */
 
     --card: 0 0% 100%;
     --card-foreground: 270 95% 10%;
@@ -141,5 +139,53 @@
 
   .animate-cart-bounce {
     animation: cart-bounce 0.4s ease-in-out;
+  }
+}
+
+@layer base {
+
+  /* Enforce minimum touch target size for interactive elements on mobile */
+  /* Global Polish */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.3);
+    color: hsl(var(--primary));
+  }
+
+  /* Modern Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 99px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.8);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  /* Improved Mobile Touch Targets */
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    /* Ensure 44px accessible touch target */
+  }
+
+  /* Branded Focus Rings (Accessibility + Premium Feel) */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
   }
 }
